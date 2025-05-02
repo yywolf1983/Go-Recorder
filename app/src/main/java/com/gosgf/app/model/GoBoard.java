@@ -407,9 +407,9 @@ public class GoBoard {
         Matcher matcher = movePattern.matcher(sgf);
         
         while (matcher.find()) {
-            int color = matcher.group(1).equals("B") ? 1 : 2;  // Changed from group("color") to group(1)
-            String coord = matcher.group(2);  // Changed from group("coord") to group(2)
-            String comment = matcher.group(3);  // Changed from group("comment") to group(3)
+            int color = matcher.group("color").equals("B") ? 1 : 2;
+            String coord = matcher.group("coord");
+            String comment = matcher.group("comment");
             
             Move currentMove;
             if (coord.isEmpty()) {

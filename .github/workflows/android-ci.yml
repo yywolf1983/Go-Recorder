@@ -18,6 +18,9 @@ jobs:
       with:
         java-version: '17'
     
+    - name: Set Gradle version
+      run: ./gradlew wrapper --gradle-version 8.2.1 --distribution-type all
+    
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     
