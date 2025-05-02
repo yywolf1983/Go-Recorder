@@ -1,0 +1,68 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.gosgf.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.gosgf.app"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        jvmToolchain(17)
+    }
+    
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.3"
+    }
+    lintOptions {
+        disable 'Deprecation'
+    }
+}
+
+dependencies {
+    def composeBomVersion = "2023.10.00"  // Updated from 2023.08.00
+    implementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    implementation 'androidx.compose.material:material'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.activity:activity-compose:1.7.2'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.5.0'
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.1'
+    implementation 'androidx.core:core:1.10.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.annotation:annotation:1.7.0'
+    
+    // Optional - Add full set of material icons
+    implementation 'androidx.compose.material:material-icons-core'
+    implementation 'androidx.compose.material:material-icons-extended'
+    
+    // Optional - Add window size utils
+    implementation 'androidx.compose.material3:material3-window-size-class'
+    
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    // Update dependencies to compatible versions
+    implementation 'androidx.emoji2:emoji2:1.4.0'
+    implementation 'androidx.emoji2:emoji2-views-helper:1.4.0'
+}

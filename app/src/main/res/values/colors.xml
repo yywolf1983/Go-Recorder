@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application colors -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Theme colors -->
+    <color name="colorPrimary">@color/purple_500</color>
+    <color name="colorPrimaryDark">@color/purple_700</color>
+    <color name="colorAccent">@color/teal_200</color>
+
+    <!-- Board specific colors -->
+    <color name="board_background">#EEC691</color>
+    <color name="board_line">#4A4A4A</color>
+    <color name="board_border">#8B4513</color>
+    
+    <!-- Button colors -->
+    <color name="button_gradient_start">#4A4A4A</color>
+    <color name="button_gradient_end">#2C2C2C</color>
+    <color name="button_stroke">#1A1A1A</color>
+    <color name="ripple_color">#80FFFFFF</color>
+    <color name="button_text_color">#FFFFFF</color>
+
+    <!-- Add this new color definition -->
+    <color name="primary">@color/purple_500</color>
+</resources>

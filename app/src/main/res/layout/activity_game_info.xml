@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/etBlack"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="黑方选手"
+        android:inputType="textPersonName"/>
+
+    <EditText
+        android:id="@+id/etWhite"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="白方选手"
+        android:layout_marginTop="16dp"
+        android:inputType="textPersonName"/>
+
+    <EditText
+        android:id="@+id/etResult"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="比赛结果"
+        android:layout_marginTop="16dp"
+        android:inputType="text"/>
+
+    <Button
+        android:id="@+id/btnSaveInfo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginTop="24dp"
+        android:text="保存信息"/>
+
+</LinearLayout>

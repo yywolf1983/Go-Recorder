@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">围棋助手</string> <!-- 确保这是正确的应用名称 -->
+    <string name="load_sgf">加载棋谱</string>
+    <string name="save_sgf">保存棋谱</string>
+    <string name="new_game">新棋局</string>
+    <string name="export_sgf">导出SGF</string>
+    <string name="sgf_save_success">SGF保存成功！</string>
+    <string name="sgf_load_failed">SGF加载失败</string>
+    <string-array name="rules">
+        <item>中国规则</item>
+        <item>日本规则</item>
+        <item>韩国规则</item>
+    </string-array>
+    <string name="skip_move">跳过一手</string>
+</resources>
