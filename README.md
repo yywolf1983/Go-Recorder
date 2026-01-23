@@ -50,3 +50,7 @@
 # 查看日志
 ./build.sh logcat
 ```
+
+
+TODO 棋盘编号还未实现
+TODO 打谱分支还未实现

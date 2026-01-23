@@ -10,6 +10,8 @@ import android.content.Intent;
 import android.net.Uri;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,11 +59,75 @@ public class MainActivity extends AppCompatActivity {
     // }
     private BoardView boardView;
     private float startX, startY;
+    private ActivityResultLauncher<Intent> openDocumentLauncher;
+    private ActivityResultLauncher<Intent> createDocumentLauncher;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        
+        openDocumentLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        try (InputStream is = getContentResolver().openInputStream(uri)) {
+                            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+                            StringBuilder sb = new StringBuilder();
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                sb.append(line);
+                            }
+                            try {
+                                SGFParser.parseSGF(sb.toString(), boardView.getBoard());
+                                boardView.invalidate();
+                                updateCommentDisplay();
+                                updateButtonStates();
+                                GoBoard board = boardView.getBoard();
+                                if (board != null) {
+                                    for (GoBoard.Move move : board.getMoveHistory()) {
+                                        if (move.x == -1) {
+                                            String player = move.color == 1 ? "黑方" : "白方";
+                                            Toast.makeText(this, "加载棋局包含" + player + "虚手", Toast.LENGTH_SHORT).show();
+                                            break;
+                                        }
+                                    }
+                                }
+                                Toast.makeText(this, "棋局已加载(包含注释)", Toast.LENGTH_SHORT).show();
+                            } catch (ArrayIndexOutOfBoundsException e) {
+                                Toast.makeText(this, "SGF文件包含无效坐标", Toast.LENGTH_SHORT).show();
+                                boardView.getBoard().resetGame();
+                                boardView.invalidate();
+                            } catch (InvalidSGFException e) {
+                                Toast.makeText(this, "无效的SGF格式: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        } catch (IOException e) {
+                            Toast.makeText(this, "加载失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            }
+        );
+        createDocumentLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                            GoBoard board = boardView.getBoard();
+                            String sgf = SGFParser.saveToString(board, board.getBlackPlayer(), board.getWhitePlayer(), board.getResult());
+                            os.write(sgf.getBytes(StandardCharsets.UTF_8));
+                            Toast.makeText(this, "棋局已保存", Toast.LENGTH_SHORT).show();
+                        } catch (IOException e) {
+                            Toast.makeText(this, "保存失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            }
+        );
         
         // 初始化视图组件
         boardView = findViewById(R.id.board_view);
@@ -137,6 +203,7 @@ public class MainActivity extends AppCompatActivity {
                 updateCommentDisplay();
                 String player = board.getCurrentPlayer() == 1 ? "黑方" : "白方";
                 Toast.makeText(this, player + "虚手成功", Toast.LENGTH_SHORT).show();
+                updateButtonStates();
             }
         });
     }
@@ -148,7 +215,29 @@ public class MainActivity extends AppCompatActivity {
     
     // 更新按钮状态
     private void updateButtonStates() {
-        // 实现按钮状态更新逻辑
+        Button btnPrev = findViewById(R.id.btnPrev);
+        Button btnNext = findViewById(R.id.btnNext);
+        Button btnBranch = findViewById(R.id.btnBranch);
+        GoBoard board = boardView.getBoard();
+        if (board == null) {
+            if (btnPrev != null) btnPrev.setEnabled(false);
+            if (btnNext != null) btnNext.setEnabled(false);
+            if (btnBranch != null) {
+                btnBranch.setEnabled(false);
+                btnBranch.setText("分支");
+            }
+            return;
+        }
+        int cur = board.getCurrentMoveNumber();
+        int total = board.getMoveHistory().size();
+        if (btnPrev != null) btnPrev.setEnabled(cur >= 0);
+        if (btnNext != null) btnNext.setEnabled(cur < total - 1);
+        boolean hasVars = board.hasCurrentVariations();
+        int varCount = board.getCurrentVariationCount();
+        if (btnBranch != null) {
+            btnBranch.setEnabled(hasVars);
+            btnBranch.setText(hasVars ? ("分支(" + varCount + ")") : "分支");
+        }
     }
     
     // 打开文件
@@ -156,7 +245,7 @@ public class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(requestCode == REQUEST_CODE_LOAD ? 
             Intent.ACTION_OPEN_DOCUMENT : Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*"); // 更通用的MIME类型
+        intent.setType("*/*");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
@@ -164,8 +253,10 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_CODE_SAVE) {
             intent.putExtra(Intent.EXTRA_TITLE, "game.sgf");
             intent.putExtra(Intent.EXTRA_ALLOW_REPLACE, true);
+            createDocumentLauncher.launch(intent);
+        } else {
+            openDocumentLauncher.launch(intent);
         }
-        startActivityForResult(intent, requestCode);
     }
     
     // 显示注释对话框
@@ -229,10 +320,16 @@ public class MainActivity extends AppCompatActivity {
     public void onBoardClick(int x, int y) {
         GoBoard board = boardView.getBoard();
         if (board != null && !board.isEditMode()) {
+            boolean willCreateVariation = board.getCurrentMoveNumber() < board.getMoveHistory().size() - 1;
             if (board.placeStone(x, y)) {
                 boardView.invalidate();
                 updateGameInfo();
                 updateCommentDisplay(); // 添加这行
+                updateButtonStates();
+                if (willCreateVariation) {
+                    Toast.makeText(this, "已创建分支", Toast.LENGTH_SHORT).show();
+                }
+                updateButtonStates();
             }
         }
     }
@@ -242,6 +339,7 @@ public class MainActivity extends AppCompatActivity {
             boardView.invalidate();
             updateGameInfo();
             updateCommentDisplay(); // 添加这行
+            updateButtonStates();
         }
     }
     
@@ -250,6 +348,7 @@ public class MainActivity extends AppCompatActivity {
             boardView.invalidate();
             updateGameInfo();
             updateCommentDisplay(); // 添加这行
+            updateButtonStates();
         }
     }
     
@@ -296,7 +395,15 @@ public class MainActivity extends AppCompatActivity {
     // 分支选择
     public void onBranchSelect(View view) {
         GoBoard board = boardView.getBoard();
+        if (board == null || board.getCurrentMove() == null) {
+            Toast.makeText(this, "当前无可选分支", Toast.LENGTH_SHORT).show();
+            return;
+        }
         List<List<GoBoard.Move>> currentVariations = board.getCurrentMove().variations;
+        if (currentVariations == null || currentVariations.isEmpty()) {
+            Toast.makeText(this, "当前手没有分支", Toast.LENGTH_SHORT).show();
+            return;
+        }
         
         new AlertDialog.Builder(this)
             .setTitle("选择分支路径")
@@ -304,72 +411,55 @@ public class MainActivity extends AppCompatActivity {
                 board.selectVariation(which);
                 boardView.invalidate();
                 updateButtonStates();
+                updateGameInfo();
+                updateCommentDisplay();
             })
             .show();
     }
     
-    // 获取分支标题
-    private String[] getBranchTitles(List<List<GoBoard.Move>> variations) {
-        return IntStream.range(0, variations.size())
-            .mapToObj(i -> "分支 " + (i + 1))
-            .toArray(String[]::new);
+    // 直接根据分支索引进行切换（用于棋盘点击分支提示）
+    public void onBranchSelectIndex(int index) {
+        GoBoard board = boardView.getBoard();
+        if (board == null || board.getCurrentMove() == null) {
+            Toast.makeText(this, "当前无可选分支", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        List<List<GoBoard.Move>> vars = board.getCurrentMove().variations;
+        if (vars == null || index < 0 || index >= vars.size()) {
+            Toast.makeText(this, "分支不存在", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        board.selectVariation(index);
+        boardView.invalidate();
+        updateButtonStates();
+        updateGameInfo();
+        updateCommentDisplay();
     }
     
-    // 确保onActivityResult方法在类内部
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        
-        if (resultCode == RESULT_OK && data != null) {
-            Uri uri = data.getData();
-            if (uri != null) {
-                if (requestCode == REQUEST_CODE_LOAD) {
-                    try (InputStream is = getContentResolver().openInputStream(uri)) {
-                        BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-                        StringBuilder sb = new StringBuilder();
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            sb.append(line);
-                        }
-                        try {
-                            boardView.getBoard().resetBoardToCurrentMove(); // Add this line to ensure board is properly reset
-                            boardView.getBoard().loadFromSGF(sb.toString());
-                            boardView.invalidate();
-                            updateCommentDisplay();
-                            // 检查是否有虚手并提示
-                            GoBoard board = boardView.getBoard();
-                            if (board != null) {
-                                for (GoBoard.Move move : board.getMoveHistory()) {
-                                    if (move.x == -1) { // 虚手
-                                        String player = move.color == 1 ? "黑方" : "白方";
-                                        Toast.makeText(this, "加载棋局包含" + player + "虚手", Toast.LENGTH_SHORT).show();
-                                        break;
-                                    }
-                                }
-                            }
-                            Toast.makeText(this, "棋局已加载(包含注释)", Toast.LENGTH_SHORT).show();
-                        } catch (ArrayIndexOutOfBoundsException e) {
-                            Toast.makeText(this, "SGF文件包含无效坐标", Toast.LENGTH_SHORT).show();
-                            boardView.getBoard().resetGame();
-                            boardView.invalidate();
-                        } catch (InvalidSGFException e) {
-                            Toast.makeText(this, "无效的SGF格式: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        }
-                    } catch (IOException e) {
-                        Toast.makeText(this, "加载失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
-                } else if (requestCode == REQUEST_CODE_SAVE) {
-                    try (OutputStream os = getContentResolver().openOutputStream(uri)) {
-                        // 修改为无参方法调用
-                        GoBoard board = boardView.getBoard();
-                        String sgf = board.toSGFString(); // 移除布尔参数
-                        os.write(sgf.getBytes(StandardCharsets.UTF_8));
-                        Toast.makeText(this, "棋局已保存", Toast.LENGTH_SHORT).show();
-                    } catch (IOException e) {
-                        Toast.makeText(this, "保存失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
+    // 获取分支标题
+    private String[] getBranchTitles(List<List<GoBoard.Move>> variations) {
+        String[] titles = new String[variations.size()];
+        for (int i = 0; i < variations.size(); i++) {
+            List<GoBoard.Move> v = variations.get(i);
+            String label = "分支 " + (i + 1);
+            if (v != null && !v.isEmpty()) {
+                GoBoard.Move m = v.get(0);
+                if (m.x >= 0 && m.y >= 0) {
+                    String color = m.color == 1 ? "黑" : "白";
+                    label += ": " + color + " " + toCoord(m.x, m.y);
                 }
             }
+            titles[i] = label;
         }
+        return titles;
     }
+    
+    private String toCoord(int x, int y) {
+        String[] letters = {"A","B","C","D","E","F","G","H","J","K","L","M","N","O","P","Q","R","S","T"};
+        String col = (x >= 0 && x < letters.length) ? letters[x] : String.valueOf((char)('A' + x));
+        int row = 19 - y;
+        return col + row;
+    }
+    
+    // 移除已弃用的 onActivityResult，改用 Activity Result API
 } // 类结束的大括号

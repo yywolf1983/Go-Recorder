@@ -22,6 +22,7 @@ public class GoBoard {
     private String date;
     private static final int BOARD_SIZE = 19;
     private int[][] board;  // 0=空, 1=黑, 2=白
+    private int[][] initialBoard;
     private List<Move> moveHistory;
     private int currentPlayer; // 1=黑, 2=白
     private Point lastCapture = null; // 记录最后一次提子的位置
@@ -48,11 +49,32 @@ public class GoBoard {
         return board[x][y];
     }
     
+    public void setupStone(int x, int y, int color) {
+        if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
+            return;
+        }
+        board[x][y] = color;
+    }
+    
+    public void removeStone(int x, int y) {
+        if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
+            return;
+        }
+        board[x][y] = 0;
+    }
+    
+    public void setCurrentPlayer(int color) {
+        if (color == 1 || color == 2) {
+            currentPlayer = color;
+        }
+    }
+    
     // 移除setComment方法
     // public void setComment(Move move, String comment) {...}
     
     public GoBoard() {
         board = new int[BOARD_SIZE][BOARD_SIZE];
+        initialBoard = new int[BOARD_SIZE][BOARD_SIZE];
         moveHistory = new ArrayList<>();
         currentPlayer = 1; // 黑子先行
     }
@@ -161,8 +183,13 @@ public class GoBoard {
         // 正式落子
         Move newMove = new Move(x, y, currentPlayer);
         
-        // 如果当前不是在最后一手，需要清除后续的变化
+        // 如果当前不是在最后一手，保留后续为分支并截断主线
         if (currentMoveNumber < moveHistory.size() - 1) {
+            Move base = moveHistory.get(currentMoveNumber);
+            List<Move> remainder = new ArrayList<>(moveHistory.subList(currentMoveNumber + 1, moveHistory.size()));
+            if (!remainder.isEmpty()) {
+                base.variations.add(remainder);
+            }
             moveHistory = new ArrayList<>(moveHistory.subList(0, currentMoveNumber + 1));
         }
         
@@ -298,6 +325,24 @@ public class GoBoard {
         return Collections.unmodifiableList(moveHistory);
     }
     
+    public void setMoveHistory(List<Move> moves) {
+        moveHistory = new ArrayList<>(moves);
+        currentMoveNumber = moveHistory.size() - 1;
+        resetBoardToCurrentMove();
+    }
+    
+    public void snapshotInitialSetup() {
+        initialBoard = copyBoard(board);
+    }
+    
+    private int[][] copyBoard(int[][] src) {
+        int[][] dst = new int[BOARD_SIZE][BOARD_SIZE];
+        for (int i = 0; i < BOARD_SIZE; i++) {
+            System.arraycopy(src[i], 0, dst[i], 0, BOARD_SIZE);
+        }
+        return dst;
+    }
+    
     public int getCurrentPlayer() {
         return currentPlayer;
     }
@@ -330,14 +375,31 @@ public class GoBoard {
     }
 
     public void resetBoardToCurrentMove() {
-        board = new int[BOARD_SIZE][BOARD_SIZE];
+        board = copyBoard(initialBoard);
         for (int i = 0; i <= currentMoveNumber; i++) {
             Move move = moveHistory.get(i);
-            // 添加虚手坐标检查
-            if (move.x >= 0 && move.y >= 0) { // 只处理有效坐标
-                board[move.x][move.y] = move.color;
-            }
+            replayMove(move);
         }
+    }
+    
+    private void replayMove(Move move) {
+        if (move == null) return;
+        if (move.x < 0 || move.y < 0) {
+            currentPlayer = move.color;
+            currentPlayer = 3 - currentPlayer;
+            return;
+        }
+        if (!isValidCoordinate(move.x, move.y)) return;
+        if (board[move.x][move.y] != 0) return;
+        currentPlayer = move.color;
+        board[move.x][move.y] = currentPlayer;
+        checkCapture(move.x, move.y);
+        Set<Point> selfGroup = new HashSet<>();
+        boolean hasSelfLiberty = hasLiberty(move.x, move.y, selfGroup);
+        if (!hasSelfLiberty) {
+            board[move.x][move.y] = 0;
+        }
+        currentPlayer = 3 - currentPlayer;
     }
 
     public static String unescapeSGFText(String text) {
@@ -461,6 +523,7 @@ public class GoBoard {
     // 修改resetGame方法
     public void resetGame() {
         board = new int[BOARD_SIZE][BOARD_SIZE];
+        initialBoard = new int[BOARD_SIZE][BOARD_SIZE];
         moveHistory.clear();
         currentPlayer = 1;
         blackPlayer = "";
@@ -503,12 +566,30 @@ public class GoBoard {
         return moveHistory.get(currentMoveNumber).variations.get(0);
     }
     
+    public boolean hasCurrentVariations() {
+        if (currentMoveNumber < 0 || currentMoveNumber >= moveHistory.size()) {
+            return false;
+        }
+        return !moveHistory.get(currentMoveNumber).variations.isEmpty();
+    }
+    
+    public int getCurrentVariationCount() {
+        if (currentMoveNumber < 0 || currentMoveNumber >= moveHistory.size()) {
+            return 0;
+        }
+        return moveHistory.get(currentMoveNumber).variations.size();
+    }
+    
     public boolean selectVariation(int index) {
         if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size()) {
             Move current = moveHistory.get(currentMoveNumber);
             if (index >= 0 && index < current.variations.size()) {
-                moveHistory = new ArrayList<>(moveHistory.subList(0, currentMoveNumber + 1));
-                moveHistory.addAll(current.variations.get(index));
+                List<Move> prefix = new ArrayList<>(moveHistory.subList(0, currentMoveNumber + 1));
+                List<Move> vMoves = current.variations.get(index);
+                moveHistory = prefix;
+                moveHistory.addAll(vMoves);
+                currentMoveNumber = Math.min(currentMoveNumber + 1, moveHistory.size() - 1);
+                resetBoardToCurrentMove();
                 return true;
             }
         }

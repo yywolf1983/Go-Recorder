@@ -30,6 +30,8 @@ public class BoardView extends View {
     private Paint boardPaint;
     private Paint stonePaint;
     private Paint starPointPaint;
+    private Paint branchPaint;
+    private Paint branchLabelPaint;
     private GoBoard board;
     
     // 棋盘相关尺寸
@@ -57,6 +59,15 @@ public class BoardView extends View {
         starPointPaint.setColor(Color.BLACK);
         starPointPaint.setStyle(Paint.Style.FILL);
         
+        branchPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        branchPaint.setStyle(Paint.Style.STROKE);
+        branchPaint.setColor(Color.rgb(30, 144, 255));
+        branchPaint.setStrokeWidth(2f);
+        
+        branchLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        branchLabelPaint.setColor(Color.rgb(30, 144, 255));
+        branchLabelPaint.setTextAlign(Paint.Align.CENTER);
+        
         board = new GoBoard();
     }
     
@@ -72,6 +83,7 @@ public class BoardView extends View {
         float boardSize = minDim - (2 * margin);
         gridSize = boardSize / (BOARD_SIZE - 1);
         stoneRadius = gridSize * 0.42f; // 减小棋子半径比例
+        branchLabelPaint.setTextSize(stoneRadius * 0.9f);
         
         // 修改棋盘起始位置（不居中，靠左上角）
         startX = margin;
@@ -125,8 +137,7 @@ public class BoardView extends View {
         
         // 绘制棋子
         if (board != null) {
-            // 获取当前手数
-            GoBoard.Move lastMove = board.getLastMove();
+            GoBoard.Move currentMove = board.getCurrentMove();
             
             for (int x = 0; x < BOARD_SIZE; x++) {
                 for (int y = 0; y < BOARD_SIZE; y++) {
@@ -154,14 +165,53 @@ public class BoardView extends View {
                                 canvas.drawCircle(cx, cy, stoneRadius, strokePaint);
                             }
                             
-                            // 标记最后一手
-                            if (lastMove != null && lastMove.x == x && lastMove.y == y) {
+                            // 高亮当前手
+                            if (currentMove != null && currentMove.x == x && currentMove.y == y) {
                                 Paint markPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                                 markPaint.setStyle(Paint.Style.STROKE);
                                 markPaint.setColor(stone == 1 ? Color.WHITE : Color.BLACK);
                                 markPaint.setStrokeWidth(1.5f);
                                 float markRadius = stoneRadius * 0.6f;
                                 canvas.drawCircle(cx, cy, markRadius, markPaint);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (board != null) {
+            GoBoard.Move cm = board.getCurrentMove();
+            if (cm != null && cm.variations != null && !cm.variations.isEmpty()) {
+                for (int i = 0; i < cm.variations.size(); i++) {
+                    List<GoBoard.Move> var = cm.variations.get(i);
+                    if (var != null && !var.isEmpty()) {
+                        GoBoard.Move vm = var.get(0);
+                        if (vm.x >= 0 && vm.y >= 0) {
+                            float cx = startX + vm.x * gridSize;
+                            float cy = startY + vm.y * gridSize;
+                            float r = stoneRadius * 0.5f;
+                            canvas.drawCircle(cx, cy, r, branchPaint);
+                            canvas.drawText(String.valueOf(i + 1), cx, cy + (branchLabelPaint.getTextSize() * 0.35f), branchLabelPaint);
+                        }
+                    }
+                }
+            } else if (cm == null) {
+                List<GoBoard.Move> history = board.getMoveHistory();
+                if (history != null && !history.isEmpty()) {
+                    GoBoard.Move first = history.get(0);
+                    if (first.variations != null && !first.variations.isEmpty()) {
+                        for (int i = 0; i < first.variations.size(); i++) {
+                            List<GoBoard.Move> var = first.variations.get(i);
+                            if (var != null && !var.isEmpty()) {
+                                GoBoard.Move vm = var.get(0);
+                                if (vm.x >= 0 && vm.y >= 0) {
+                                    float cx = startX + vm.x * gridSize;
+                                    float cy = startY + vm.y * gridSize;
+                                    float r = stoneRadius * 0.5f;
+                                    canvas.drawCircle(cx, cy, r, branchPaint);
+                                    canvas.drawText(String.valueOf(i + 1), cx, cy + (branchLabelPaint.getTextSize() * 0.35f), branchLabelPaint);
+                                }
                             }
                         }
                     }
@@ -190,6 +240,58 @@ public class BoardView extends View {
             float x = event.getX();
             float y = event.getY();
             
+            // 优先检测分支提示点击
+            if (board != null) {
+                GoBoard.Move cm = board.getCurrentMove();
+                if (cm != null && cm.variations != null && !cm.variations.isEmpty()) {
+                    for (int i = 0; i < cm.variations.size(); i++) {
+                        List<GoBoard.Move> var = cm.variations.get(i);
+                        if (var != null && !var.isEmpty()) {
+                            GoBoard.Move vm = var.get(0);
+                            if (vm.x >= 0 && vm.y >= 0) {
+                                float cx = startX + vm.x * gridSize;
+                                float cy = startY + vm.y * gridSize;
+                                float r = stoneRadius * 0.6f;
+                                float dx = x - cx;
+                                float dy = y - cy;
+                                if (dx * dx + dy * dy <= r * r) {
+                                    if (getContext() instanceof MainActivity) {
+                                        ((MainActivity) getContext()).onBranchSelectIndex(i);
+                                    }
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                } else if (cm == null) {
+                    List<GoBoard.Move> history = board.getMoveHistory();
+                    if (history != null && !history.isEmpty()) {
+                        GoBoard.Move first = history.get(0);
+                        if (first.variations != null && !first.variations.isEmpty()) {
+                            for (int i = 0; i < first.variations.size(); i++) {
+                                List<GoBoard.Move> var = first.variations.get(i);
+                                if (var != null && !var.isEmpty()) {
+                                    GoBoard.Move vm = var.get(0);
+                                    if (vm.x >= 0 && vm.y >= 0) {
+                                        float cx = startX + vm.x * gridSize;
+                                        float cy = startY + vm.y * gridSize;
+                                        float r = stoneRadius * 0.6f;
+                                        float dx = x - cx;
+                                        float dy = y - cy;
+                                        if (dx * dx + dy * dy <= r * r) {
+                                            if (getContext() instanceof MainActivity) {
+                                                ((MainActivity) getContext()).onBranchSelectIndex(i);
+                                            }
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
             // 检查点击是否在棋盘范围内
             if (x < startX || x > startX + gridSize * (BOARD_SIZE-1) ||
                 y < startY || y > startY + gridSize * (BOARD_SIZE-1)) {
@@ -213,4 +315,3 @@ public class BoardView extends View {
         return super.onTouchEvent(event);
     }
 }
-
