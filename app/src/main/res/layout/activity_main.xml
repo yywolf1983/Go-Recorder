@@ -113,13 +113,5 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="虚手" />
-        
-        <Button
-            android:id="@+id/btnBranch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="分支"
-            android:layout_marginStart="12dp"
-            android:onClick="onBranchSelect"/>
     </LinearLayout>
 </LinearLayout>

@@ -193,6 +193,8 @@ public class BoardView extends View {
                             float r = stoneRadius * 0.5f;
                             canvas.drawCircle(cx, cy, r, branchPaint);
                             canvas.drawText(String.valueOf(i + 1), cx, cy + (branchLabelPaint.getTextSize() * 0.35f), branchLabelPaint);
+                            String coord = toCoord(vm.x, vm.y);
+                            canvas.drawText(coord, cx, cy - stoneRadius * 0.9f, branchLabelPaint);
                         }
                     }
                 }
@@ -211,6 +213,8 @@ public class BoardView extends View {
                                     float r = stoneRadius * 0.5f;
                                     canvas.drawCircle(cx, cy, r, branchPaint);
                                     canvas.drawText(String.valueOf(i + 1), cx, cy + (branchLabelPaint.getTextSize() * 0.35f), branchLabelPaint);
+                                    String coord = toCoord(vm.x, vm.y);
+                                    canvas.drawText(coord, cx, cy - stoneRadius * 0.9f, branchLabelPaint);
                                 }
                             }
                         }
@@ -251,7 +255,7 @@ public class BoardView extends View {
                             if (vm.x >= 0 && vm.y >= 0) {
                                 float cx = startX + vm.x * gridSize;
                                 float cy = startY + vm.y * gridSize;
-                                float r = stoneRadius * 0.6f;
+                                float r = Math.max(stoneRadius * 0.85f, gridSize * 0.4f);
                                 float dx = x - cx;
                                 float dy = y - cy;
                                 if (dx * dx + dy * dy <= r * r) {
@@ -275,7 +279,7 @@ public class BoardView extends View {
                                     if (vm.x >= 0 && vm.y >= 0) {
                                         float cx = startX + vm.x * gridSize;
                                         float cy = startY + vm.y * gridSize;
-                                        float r = stoneRadius * 0.6f;
+                                        float r = Math.max(stoneRadius * 0.85f, gridSize * 0.4f);
                                         float dx = x - cx;
                                         float dy = y - cy;
                                         if (dx * dx + dy * dy <= r * r) {
@@ -313,5 +317,12 @@ public class BoardView extends View {
             return true;
         }
         return super.onTouchEvent(event);
+    }
+    
+    private String toCoord(int x, int y) {
+        String[] letters = {"A","B","C","D","E","F","G","H","J","K","L","M","N","O","P","Q","R","S","T"};
+        String col = (x >= 0 && x < letters.length) ? letters[x] : String.valueOf((char)('A' + x));
+        int row = 19 - y;
+        return col + row;
     }
 }

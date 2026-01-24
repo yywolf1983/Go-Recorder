@@ -52,5 +52,10 @@
 ```
 
 
+emulator -avd Pixel_9_Pro_API_33
+
+## TODO
+
 TODO 棋盘编号还未实现
 TODO 打谱分支还未实现
+     分支第一步解析有问题。

@@ -164,7 +164,12 @@ public class MainActivity extends AppCompatActivity {
         });
         
         findViewById(R.id.btnNext).setOnClickListener(v -> {
-            if (boardView.getBoard().nextMove()) {
+            GoBoard board = boardView.getBoard();
+            if (board != null && board.getCurrentMoveNumber() < 0 && board.hasStartVariations()) {
+                Toast.makeText(this, "第一步存在分支，请先在棋盘选择分支", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (board.nextMove()) {
                 boardView.invalidateBoard();
                 updateButtonStates();
                 updateCommentDisplay(); // 添加这行
@@ -217,27 +222,17 @@ public class MainActivity extends AppCompatActivity {
     private void updateButtonStates() {
         Button btnPrev = findViewById(R.id.btnPrev);
         Button btnNext = findViewById(R.id.btnNext);
-        Button btnBranch = findViewById(R.id.btnBranch);
         GoBoard board = boardView.getBoard();
         if (board == null) {
             if (btnPrev != null) btnPrev.setEnabled(false);
             if (btnNext != null) btnNext.setEnabled(false);
-            if (btnBranch != null) {
-                btnBranch.setEnabled(false);
-                btnBranch.setText("分支");
-            }
             return;
         }
         int cur = board.getCurrentMoveNumber();
         int total = board.getMoveHistory().size();
         if (btnPrev != null) btnPrev.setEnabled(cur >= 0);
-        if (btnNext != null) btnNext.setEnabled(cur < total - 1);
-        boolean hasVars = board.hasCurrentVariations();
-        int varCount = board.getCurrentVariationCount();
-        if (btnBranch != null) {
-            btnBranch.setEnabled(hasVars);
-            btnBranch.setText(hasVars ? ("分支(" + varCount + ")") : "分支");
-        }
+        boolean blockNext = (cur < 0) && board.hasStartVariations();
+        if (btnNext != null) btnNext.setEnabled(!blockNext && cur < total - 1);
     }
     
     // 打开文件
@@ -429,7 +424,11 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "分支不存在", Toast.LENGTH_SHORT).show();
             return;
         }
-        board.selectVariation(index);
+        boolean ok = board.selectVariation(index);
+        if (!ok) {
+            Toast.makeText(this, "分支第一步解析失败", Toast.LENGTH_SHORT).show();
+            return;
+        }
         boardView.invalidate();
         updateButtonStates();
         updateGameInfo();

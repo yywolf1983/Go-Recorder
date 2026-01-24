@@ -429,6 +429,9 @@ public class GoBoard {
     }
     
     public boolean nextMove() {
+        if (currentMoveNumber < 0 && hasStartVariations()) {
+            return false;
+        }
         if (currentMoveNumber >= moveHistory.size() - 1) {
             return false;
         }
@@ -580,12 +583,39 @@ public class GoBoard {
         return moveHistory.get(currentMoveNumber).variations.size();
     }
     
+    public boolean hasStartVariations() {
+        if (moveHistory.isEmpty()) {
+            return false;
+        }
+        Move first = moveHistory.get(0);
+        return first.variations != null && !first.variations.isEmpty();
+    }
+    
     public boolean selectVariation(int index) {
+        // 起始态选择分支：直接将主线替换为选择的分支，定位到分支第一步
+        if (currentMoveNumber < 0) {
+            if (moveHistory.isEmpty()) return false;
+            Move first = moveHistory.get(0);
+            if (index < 0 || index >= first.variations.size()) return false;
+            List<Move> vMoves = first.variations.get(index);
+            if (!validateBranchFirstStep(vMoves)) {
+                Log.e("GoBoard", "分支第一步解析失败（起始态）");
+                return false;
+            }
+            moveHistory = new ArrayList<>(vMoves);
+            currentMoveNumber = Math.min(0, moveHistory.size() - 1);
+            resetBoardToCurrentMove();
+            return true;
+        }
         if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size()) {
             Move current = moveHistory.get(currentMoveNumber);
             if (index >= 0 && index < current.variations.size()) {
                 List<Move> prefix = new ArrayList<>(moveHistory.subList(0, currentMoveNumber + 1));
                 List<Move> vMoves = current.variations.get(index);
+                if (!validateBranchFirstStep(vMoves)) {
+                    Log.e("GoBoard", "分支第一步解析失败（当前手态）");
+                    return false;
+                }
                 moveHistory = prefix;
                 moveHistory.addAll(vMoves);
                 currentMoveNumber = Math.min(currentMoveNumber + 1, moveHistory.size() - 1);
@@ -594,6 +624,20 @@ public class GoBoard {
             }
         }
         return false;
+    }
+
+    private boolean validateBranchFirstStep(List<Move> branch) {
+        if (branch == null || branch.isEmpty()) return false;
+        Move firstStep = branch.get(0);
+        if (firstStep.x < 0 || firstStep.y < 0) {
+            // 虚手作为分支第一步是允许的
+            return true;
+        }
+        if (!isValidCoordinate(firstStep.x, firstStep.y)) {
+            Log.e("GoBoard", "分支第一步坐标无效: (" + firstStep.x + "," + firstStep.y + ")");
+            return false;
+        }
+        return true;
     }
     
     public Move getCurrentMove() {
