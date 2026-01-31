@@ -85,21 +85,53 @@ public class SGFParser {
         Parser p = new Parser(sgf);
         List<List<Node>> trees = p.parseCollection();
         if (trees.isEmpty()) return;
-        List<Node> main = trees.get(0);
-        applyHeader(main, board);
-        applyRootSetup(main, board);
+        
+        // Sabaki风格：完全按照Sabaki的逻辑处理
+        // 第一个根分支作为主分支，其他根分支作为第一个Move的variations
+        
+        // 从第一个根分支应用头信息和初始设置
+        List<Node> firstTree = trees.get(0);
+        applyHeader(firstTree, board);
+        applyRootSetup(firstTree, board);
         board.snapshotInitialSetup();
-        List<GoBoard.Move> mainMoves = toMovesDeep(main);
-        if (mainMoves.isEmpty() && !main.isEmpty() && main.get(0).variations != null && !main.get(0).variations.isEmpty()) {
-            List<List<Node>> rootVars = main.get(0).variations;
-            mainMoves = toMovesDeep(rootVars.get(0));
-            for (int i = 1; i < rootVars.size(); i++) {
-                List<GoBoard.Move> vMoves = toMovesDeep(rootVars.get(i));
-                if (!mainMoves.isEmpty()) {
-                    mainMoves.get(0).variations.add(vMoves);
+        
+        // 解析所有根分支为Move列表
+        List<List<GoBoard.Move>> allRootMoves = new java.util.ArrayList<>();
+        for (List<Node> tree : trees) {
+            List<GoBoard.Move> moves = toMovesDeep(tree);
+            allRootMoves.add(moves);
+        }
+        
+        // 构建主分支
+        List<GoBoard.Move> mainMoves = new java.util.ArrayList<>();
+        
+        // 如果第一个根分支有实际棋步，使用它作为主分支
+        if (!allRootMoves.get(0).isEmpty()) {
+            mainMoves.addAll(allRootMoves.get(0));
+        } else {
+            // 如果第一个根分支为空，创建一个虚手Move作为容器
+            GoBoard.Move emptyMove = new GoBoard.Move(-1, -1, 1);
+            mainMoves.add(emptyMove);
+        }
+        
+        // 将其他根分支作为第一个Move的variations
+        for (int i = 1; i < allRootMoves.size(); i++) {
+            List<GoBoard.Move> rootMoves = allRootMoves.get(i);
+            if (!rootMoves.isEmpty()) {
+                mainMoves.get(0).variations.add(rootMoves);
+            }
+        }
+        
+        // 如果第一个根分支本身有variations，也要添加到第一个Move
+        if (!firstTree.isEmpty() && firstTree.get(0).variations != null && !firstTree.get(0).variations.isEmpty()) {
+            for (List<Node> var : firstTree.get(0).variations) {
+                List<GoBoard.Move> varMoves = toMovesDeep(var);
+                if (!varMoves.isEmpty()) {
+                    mainMoves.get(0).variations.add(varMoves);
                 }
             }
         }
+        
         board.setMoveHistory(mainMoves);
         board.setCurrentMoveNumber(-1);
     }
@@ -249,8 +281,11 @@ public class SGFParser {
 
     private static GoBoard.Move coordToMove(String coord, int color) {
         if (coord == null || coord.isEmpty()) return new GoBoard.Move(-1, -1, color);
-        int x = coord.charAt(0) - 'a';
-        int y = coord.charAt(1) - 'a';
+        // 确保坐标只包含前两个字符（去除可能的额外字符）
+        String cleanCoord = coord.trim();
+        if (cleanCoord.length() < 2) return new GoBoard.Move(-1, -1, color);
+        int x = cleanCoord.charAt(0) - 'a';
+        int y = cleanCoord.charAt(1) - 'a';
         return new GoBoard.Move(x, y, color);
     }
 
@@ -384,7 +419,7 @@ public class SGFParser {
                     i++;
                 }
             }
-            return sb.toString();
+            return sb.toString().trim();
         }
         void skipWs() {
             while (i < s.length()) {

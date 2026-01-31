@@ -9,109 +9,205 @@
         android:id="@+id/board_view"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_margin="16dp"
-        android:elevation="4dp"/>
+        android:layout_weight="3"
+        android:layout_margin="4dp"
+        android:elevation="2dp"/>
 
-    <!-- 将注释显示区域移到棋盘下方 -->
-    <TextView
-        android:id="@+id/tvComment"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginHorizontal="16dp"
-        android:padding="8dp"
-        android:background="#f0f0f0"
-        android:textSize="14sp"
-        android:visibility="gone"/>
-
-    <TextView
-        android:id="@+id/tvGameInfo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="8dp"
-        android:text="游戏信息" />
-
-    <TextView
-        android:id="@+id/tvPlayerStatus"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="4dp"
-        android:text="黑方回合" />
-
-    <TextView
-        android:id="@+id/tvCommentDisplay"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="4dp"
-        android:text="暂无注释" />
-
+    <!-- 游戏信息 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/btnPrev"
-            android:layout_width="0dp"
+        android:orientation="vertical"
+        android:background="@drawable/round_bg"
+        android:padding="8dp"
+        android:layout_margin="6dp">
+        
+        <TextView
+            android:id="@+id/tvGameInfo"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="上一步" />
+            android:padding="4dp"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:text="游戏信息" />
 
-        <Button
-            android:id="@+id/btnNext"
-            android:layout_width="0dp"
+        <TextView
+            android:id="@+id/tvCommentDisplay"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="下一步" />
-
-        <Button
-            android:id="@+id/btnNew"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="新棋局" />
+            android:padding="4dp"
+            android:textSize="14sp"
+            android:textColor="@color/black"
+            android:text="暂无注释" />
     </LinearLayout>
 
-    <LinearLayout
+    <!-- 游戏树 -->
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:text="游戏树"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:padding="2dp"/>
 
-        <Button
-            android:id="@+id/btnLoad"
-            android:layout_width="0dp"
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="2">
+
+        <com.gosgf.app.view.SGFTreeView
+            android:id="@+id/tree_view"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="加载" />
+            android:background="#ffffff"
+            android:padding="4dp"/>
+    </ScrollView>
 
-        <Button
-            android:id="@+id/btnSave"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="保存" />
-
-        <!-- 添加注释按钮 -->
-        <Button
-            android:id="@+id/btnComment"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="注释"
-            android:layout_marginStart="8dp"/>
-    </LinearLayout>
-
-    <!-- 添加摆子模式按钮 -->
+    <!-- 导航按钮 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="8dp">
+        android:padding="6dp"
+        android:background="@color/board_background">
+
+        <Button
+            android:id="@+id/btnPrev"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="◀"
+            android:textSize="24sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginEnd="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
+
+        <Button
+            android:id="@+id/btnNext"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="▶"
+            android:textSize="24sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
+
+        <Button
+            android:id="@+id/btnNew"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="新"
+            android:textSize="18sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginStart="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
+    </LinearLayout>
+
+    <!-- 文件操作 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="6dp"
+        android:background="@color/board_background">
+
+        <Button
+            android:id="@+id/btnLoad"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="加载"
+            android:textSize="16sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginEnd="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="保存"
+            android:textSize="16sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
+
+        <Button
+            android:id="@+id/btnComment"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="注"
+            android:textSize="18sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginStart="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
+    </LinearLayout>
+
+    <!-- 游戏操作 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="6dp"
+        android:background="@color/board_background">
+            
+        <Button
+            android:id="@+id/btnToStart"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="起始"
+            android:textSize="16sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginEnd="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
             
         <Button
             android:id="@+id/btnPass"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="虚手" />
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="虚手"
+            android:textSize="16sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
+            
+        <Button
+            android:id="@+id/btnToEnd"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="结尾"
+            android:textSize="16sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/custom_button_background"
+            android:layout_marginStart="6dp"
+            android:elevation="4dp"
+            android:stateListAnimator="@null"/>
     </LinearLayout>
 </LinearLayout>

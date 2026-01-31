@@ -1,0 +1,43 @@
+name: Auto Build Release APK
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-release:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Set Gradle version
+      run: ./gradlew wrapper --gradle-version 8.2.1 --distribution-type all
+    
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+    
+    - name: Build Release APK
+      run: ./gradlew assembleRelease
+    
+    - name: Create 1.1.0 Branch
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git checkout -b 1.1.0 || git checkout 1.1.0
+        git push origin 1.1.0:1.1.0
+    
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: go-record-app-release
+        path: app/build/outputs/apk/release/app-release.apk
+        retention-days: 90

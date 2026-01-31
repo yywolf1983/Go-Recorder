@@ -24,6 +24,7 @@ public class GoBoard {
     private int[][] board;  // 0=空, 1=黑, 2=白
     private int[][] initialBoard;
     private List<Move> moveHistory;
+    private List<Move> mainBranchHistory;
     private int currentPlayer; // 1=黑, 2=白
     private Point lastCapture = null; // 记录最后一次提子的位置
     
@@ -33,6 +34,11 @@ public class GoBoard {
         public int color;  // 1=黑, 2=白
         public String comment;
         public List<List<Move>> variations = new ArrayList<>();
+        
+        // 标记类型: 0=无, 1=三角形, 2=方形, 3=圆形, 4=X标记
+        public int markType = 0;
+        // 标签文本
+        public String label = "";
         
         public Move(int x, int y, int color) {
             this.x = x;
@@ -76,6 +82,7 @@ public class GoBoard {
         board = new int[BOARD_SIZE][BOARD_SIZE];
         initialBoard = new int[BOARD_SIZE][BOARD_SIZE];
         moveHistory = new ArrayList<>();
+        mainBranchHistory = new ArrayList<>();
         currentPlayer = 1; // 黑子先行
     }
     
@@ -184,7 +191,7 @@ public class GoBoard {
         Move newMove = new Move(x, y, currentPlayer);
         
         // 如果当前不是在最后一手，保留后续为分支并截断主线
-        if (currentMoveNumber < moveHistory.size() - 1) {
+        if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size() - 1) {
             Move base = moveHistory.get(currentMoveNumber);
             List<Move> remainder = new ArrayList<>(moveHistory.subList(currentMoveNumber + 1, moveHistory.size()));
             if (!remainder.isEmpty()) {
@@ -195,6 +202,11 @@ public class GoBoard {
         
         moveHistory.add(newMove);
         currentMoveNumber = moveHistory.size() - 1;
+        
+        // 更新主分支历史：如果我们在主分支末尾，则添加
+        if (mainBranchHistory.isEmpty() || currentMoveNumber == mainBranchHistory.size()) {
+            mainBranchHistory.add(newMove);
+        }
         
         // 切换玩家
         currentPlayer = (currentPlayer == 1) ? 2 : 1;
@@ -528,6 +540,7 @@ public class GoBoard {
         board = new int[BOARD_SIZE][BOARD_SIZE];
         initialBoard = new int[BOARD_SIZE][BOARD_SIZE];
         moveHistory.clear();
+        mainBranchHistory = new ArrayList<>();
         currentPlayer = 1;
         blackPlayer = "";
         whitePlayer = "";
@@ -602,11 +615,46 @@ public class GoBoard {
                 Log.e("GoBoard", "分支第一步解析失败（起始态）");
                 return false;
             }
-            moveHistory = new ArrayList<>(vMoves);
-            currentMoveNumber = Math.min(0, moveHistory.size() - 1);
+            
+            // 保存当前主线作为一个分支（Sabaki风格）
+            if (moveHistory.size() > 1) {
+                List<Move> currentMain = new ArrayList<>(moveHistory.subList(1, moveHistory.size()));
+                if (!currentMain.isEmpty()) {
+                    // 检查是否已存在相同的分支
+                    boolean exists = false;
+                    for (List<Move> existingVar : first.variations) {
+                        if (existingVar.size() == currentMain.size()) {
+                            boolean same = true;
+                            for (int i = 0; i < existingVar.size(); i++) {
+                                Move existingMove = existingVar.get(i);
+                                Move currentMove = currentMain.get(i);
+                                if (existingMove.x != currentMove.x || existingMove.y != currentMove.y || existingMove.color != currentMove.color) {
+                                    same = false;
+                                    break;
+                                }
+                            }
+                            if (same) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!exists) {
+                        first.variations.add(currentMain);
+                    }
+                }
+            }
+            
+            // 将选择的分支设为主线（Sabaki风格）
+            moveHistory = new ArrayList<>();
+            moveHistory.add(first);
+            moveHistory.addAll(vMoves);
+            currentMoveNumber = Math.min(1, moveHistory.size() - 1);
             resetBoardToCurrentMove();
             return true;
         }
+        
+        // 当前手态选择分支
         if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size()) {
             Move current = moveHistory.get(currentMoveNumber);
             if (index >= 0 && index < current.variations.size()) {
@@ -616,6 +664,37 @@ public class GoBoard {
                     Log.e("GoBoard", "分支第一步解析失败（当前手态）");
                     return false;
                 }
+                
+                // 保存当前后续步骤作为一个分支（Sabaki风格）
+                if (currentMoveNumber < moveHistory.size() - 1) {
+                    List<Move> currentRemainder = new ArrayList<>(moveHistory.subList(currentMoveNumber + 1, moveHistory.size()));
+                    if (!currentRemainder.isEmpty()) {
+                        // 检查是否已存在相同的分支
+                        boolean exists = false;
+                        for (List<Move> existingVar : current.variations) {
+                            if (existingVar.size() == currentRemainder.size()) {
+                                boolean same = true;
+                                for (int i = 0; i < existingVar.size(); i++) {
+                                    Move existingMove = existingVar.get(i);
+                                    Move currentMove = currentRemainder.get(i);
+                                    if (existingMove.x != currentMove.x || existingMove.y != currentMove.y || existingMove.color != currentMove.color) {
+                                        same = false;
+                                        break;
+                                    }
+                                }
+                                if (same) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!exists) {
+                            current.variations.add(currentRemainder);
+                        }
+                    }
+                }
+                
+                // 将选择的分支添加到主线
                 moveHistory = prefix;
                 moveHistory.addAll(vMoves);
                 currentMoveNumber = Math.min(currentMoveNumber + 1, moveHistory.size() - 1);
@@ -667,6 +746,52 @@ public class GoBoard {
                                    .replace("[", "\\[")
                                    .replace("\n", "\\n");
         }
+    }
+    
+    // 添加标记到当前手
+    public void setMark(int markType) {
+        Move currentMove = getCurrentMove();
+        if (currentMove != null) {
+            currentMove.markType = markType;
+        }
+    }
+    
+    // 获取当前手的标记类型
+    public int getMark() {
+        Move currentMove = getCurrentMove();
+        if (currentMove != null) {
+            return currentMove.markType;
+        }
+        return 0;
+    }
+    
+    // 设置标签到当前手
+    public void setLabel(String label) {
+        Move currentMove = getCurrentMove();
+        if (currentMove != null) {
+            currentMove.label = label;
+        }
+    }
+    
+    // 获取当前手的标签
+    public String getLabel() {
+        Move currentMove = getCurrentMove();
+        if (currentMove != null) {
+            return currentMove.label;
+        }
+        return "";
+    }
+    
+    public void switchToMainBranch() {
+        if (!mainBranchHistory.isEmpty()) {
+            moveHistory = new ArrayList<>(mainBranchHistory);
+            currentMoveNumber = moveHistory.size() - 1;
+            resetBoardToCurrentMove();
+        }
+    }
+    
+    public int getMainBranchSize() {
+        return mainBranchHistory.size();
     }
 
     // 添加切换当前棋子颜色的方法（用于摆子模式）
