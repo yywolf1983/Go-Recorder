@@ -26,6 +26,11 @@
     <color name="ripple_color">#80FFFFFF</color>
     <color name="button_text_color">#FFFFFF</color>
 
+    <!--清雅风格颜色-->
+    <color name="light_gray">#F0F0F0</color>
+    <color name="medium_gray">#C0C0C0</color>
+    <color name="dark_gray">#A0A0A0</color>
+
     <!-- Add this new color definition -->
     <color name="primary">@color/purple_500</color>
 </resources>

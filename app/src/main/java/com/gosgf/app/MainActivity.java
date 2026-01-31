@@ -19,7 +19,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import com.gosgf.app.view.BoardView;
-import com.gosgf.app.view.SGFTreeView;
 import com.gosgf.app.model.GoBoard;
 import com.gosgf.app.R;
 import com.gosgf.app.util.SGFParser;
@@ -58,7 +57,6 @@ public class MainActivity extends AppCompatActivity {
     //     }
     // }
     private BoardView boardView;
-    private SGFTreeView treeView;
     private float startX, startY;
     private ActivityResultLauncher<Intent> openDocumentLauncher;
     private ActivityResultLauncher<Intent> createDocumentLauncher;
@@ -83,8 +81,9 @@ public class MainActivity extends AppCompatActivity {
                             }
                             try {
                                 SGFParser.parseSGF(sb.toString(), boardView.getBoard());
+                                // Set to start of game when loading a game (no moves should be displayed)
+                                boardView.getBoard().setCurrentMoveNumber(-1);
                                 boardView.invalidate();
-                                updateGameTree();
                                 updateCommentDisplay();
                                 updateButtonStates();
                                 GoBoard board = boardView.getBoard();
@@ -102,7 +101,6 @@ public class MainActivity extends AppCompatActivity {
                                 Toast.makeText(this, "SGF文件包含无效坐标", Toast.LENGTH_SHORT).show();
                                 boardView.getBoard().resetGame();
                                 boardView.invalidate();
-                                updateGameTree();
                             } catch (InvalidSGFException e) {
                                 Toast.makeText(this, "无效的SGF格式: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                             }
@@ -134,7 +132,6 @@ public class MainActivity extends AppCompatActivity {
         
         // 初始化视图组件
         boardView = findViewById(R.id.board_view);
-        treeView = findViewById(R.id.tree_view);
         tvGameInfo = findViewById(R.id.tvGameInfo);
         
         // 初始化按钮
@@ -158,24 +155,73 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btnComment).setOnClickListener(v -> showCommentDialog());
         
         btnPrev.setOnClickListener(v -> {
-            if (boardView.getBoard().previousMove()) {
+            GoBoard board = boardView.getBoard();
+            if (board.getCurrentMoveNumber() == 0) {
+                // If at first move, go to start of game
+                board.setCurrentMoveNumber(-1);
                 boardView.invalidateBoard();
+                updateGameInfo();
+                updateButtonStates();
+                updateCommentDisplay();
+            } else if (board.previousMove()) {
+                boardView.invalidateBoard();
+                updateGameInfo();
                 updateButtonStates();
                 updateCommentDisplay(); // 添加这行
             }
         });
         
-        findViewById(R.id.btnNext).setOnClickListener(v -> {
-            GoBoard board = boardView.getBoard();
-            if (board.nextMove()) {
-                boardView.invalidateBoard();
-                updateButtonStates();
-                updateCommentDisplay();
-            }
-        });
+        // 确保btnNext按钮不为null
+        if (btnNext != null) {
+            btnNext.setOnClickListener(v -> {
+                GoBoard board = boardView.getBoard();
+                if (board == null) {
+                    return;
+                }
+                int currentMove = board.getCurrentMoveNumber();
+                List<GoBoard.Move> moveHistory = board.getMoveHistory();
+                
+                // Check if current position has variations
+                boolean branchSelected = false;
+                
+                // Case 1: At start with variations
+                if (currentMove < 0) {
+                    if (board.hasStartVariations()) {
+                        // At start with variations, select first branch
+                        branchSelected = board.selectVariation(0);
+                    } else if (!moveHistory.isEmpty()) {
+                        // At start without variations but with moves, advance to first move
+                        branchSelected = board.nextMove();
+                    }
+                }
+                // Case 2: At regular move with variations
+                else if (currentMove >= 0 && currentMove < moveHistory.size()) {
+                    GoBoard.Move currentBoardMove = moveHistory.get(currentMove);
+                    if (currentBoardMove != null) {
+                        if (!currentBoardMove.variations.isEmpty()) {
+                            // Has variations, auto-select the first one (tree's foremost branch)
+                            branchSelected = board.selectVariation(0);
+                        } else {
+                            // No variations, advance normally
+                            branchSelected = board.nextMove();
+                        }
+                    }
+                }
+                
+                // If we advanced or selected a branch, update UI
+                if (branchSelected) {
+                    boardView.invalidateBoard();
+                    updateGameInfo();
+                    updateButtonStates();
+                    updateCommentDisplay();
+                }
+            });
+        }
         
         findViewById(R.id.btnNew).setOnClickListener(v -> {
             boardView.getBoard().resetGame();
+            // Set to first move when creating a new game (default should have one move)
+            boardView.getBoard().setCurrentMoveNumber(0);
             boardView.invalidateBoard();
             updateButtonStates();
         });
@@ -202,7 +248,6 @@ public class MainActivity extends AppCompatActivity {
             if (board != null) {
                 board.skipTurn();
                 boardView.invalidate();
-                updateGameTree();
                 updateGameInfo();
                 updateCommentDisplay();
                 String player = board.getCurrentPlayer() == 1 ? "黑方" : "白方";
@@ -218,7 +263,7 @@ public class MainActivity extends AppCompatActivity {
             if (board != null) {
                 board.setCurrentMoveNumber(-1);
                 boardView.invalidate();
-                updateGameTree();
+                updateGameInfo();
                 updateButtonStates();
                 updateCommentDisplay();
                 Toast.makeText(this, "已回到棋局开始", Toast.LENGTH_SHORT).show();
@@ -233,7 +278,6 @@ public class MainActivity extends AppCompatActivity {
                 int totalMoves = board.getMoveHistory().size();
                 board.setCurrentMoveNumber(totalMoves - 1);
                 boardView.invalidate();
-                updateGameTree();
                 updateButtonStates();
                 updateCommentDisplay();
                 Toast.makeText(this, "已到棋局结尾", Toast.LENGTH_SHORT).show();
@@ -264,8 +308,9 @@ public class MainActivity extends AppCompatActivity {
         int cur = board.getCurrentMoveNumber();
         int total = board.getMoveHistory().size();
         if (btnPrev != null) btnPrev.setEnabled(cur >= 0);
-        boolean blockNext = (cur < 0) && board.hasStartVariations();
-        if (btnNext != null) btnNext.setEnabled(!blockNext && cur < total - 1);
+        // Always enable btnNext if there are moves to go to or variations to select
+        boolean canAdvance = (cur < total - 1) || board.hasStartVariations();
+        if (btnNext != null) btnNext.setEnabled(canAdvance);
         if (btnToStart != null) btnToStart.setEnabled(total > 0);
         if (btnToEnd != null) btnToEnd.setEnabled(total > 0 && cur < total - 1);
     }
@@ -390,26 +435,22 @@ public class MainActivity extends AppCompatActivity {
         String playerStatus = board.getCurrentPlayer() == 1 ? 
             "黑方回合" : "白方回合";
         
-        int currentMove = Math.max(1, board.getCurrentMoveNumber() + 1); // 修改为从1开始
-        int totalMoves = Math.max(1, board.getMoveHistory().size()); // 修改为从1开始
+        int currentMoveNumber = board.getCurrentMoveNumber();
+        int totalMoves = board.getMoveHistory().size();
         
-        String moveInfo = "第 " + currentMove + " 手 / 共 " + totalMoves + " 手";
+        String moveInfo;
+        if (currentMoveNumber == -1) {
+            moveInfo = "棋局开始";
+        } else {
+            int currentMove = currentMoveNumber + 1; // 从1开始
+            moveInfo = "第 " + currentMove + " 手 / 共 " + totalMoves + " 手";
+        }
         
         // 删除摆子模式判断
         tvGameInfo.setText(playerStatus + " | " + moveInfo);
-        
-        // 更新游戏树视图
-        if (treeView != null) {
-            treeView.setBoard(board);
-        }
     }
     
-    // 更新游戏树视图
-    private void updateGameTree() {
-        if (treeView != null && boardView != null) {
-            treeView.setBoard(boardView.getBoard());
-        }
-    }
+
     
     // 重置游戏
     private void resetGame() {

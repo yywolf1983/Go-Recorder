@@ -5,6 +5,11 @@
     android:orientation="vertical"
     android:background="@color/board_background">
 
+    <!-- Spacer to move board down -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="20dp"/>
+
     <com.gosgf.app.view.BoardView
         android:id="@+id/board_view"
         android:layout_width="match_parent"
@@ -42,27 +47,7 @@
             android:text="暂无注释" />
     </LinearLayout>
 
-    <!-- 游戏树 -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="游戏树"
-        android:textSize="12sp"
-        android:textStyle="bold"
-        android:padding="2dp"/>
 
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="2">
-
-        <com.gosgf.app.view.SGFTreeView
-            android:id="@+id/tree_view"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="#ffffff"
-            android:padding="4dp"/>
-    </ScrollView>
 
     <!-- 导航按钮 -->
     <LinearLayout

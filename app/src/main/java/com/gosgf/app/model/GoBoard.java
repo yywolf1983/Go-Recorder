@@ -187,11 +187,14 @@ public class GoBoard {
         }
         
         // 正式落子
-        // 正式落子
         Move newMove = new Move(x, y, currentPlayer);
         
+        // 如果当前是棋局开始状态（currentMoveNumber = -1），清空moveHistory，从第一手开始
+        if (currentMoveNumber == -1) {
+            moveHistory.clear();
+        }
         // 如果当前不是在最后一手，保留后续为分支并截断主线
-        if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size() - 1) {
+        else if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size() - 1) {
             Move base = moveHistory.get(currentMoveNumber);
             List<Move> remainder = new ArrayList<>(moveHistory.subList(currentMoveNumber + 1, moveHistory.size()));
             if (!remainder.isEmpty()) {
@@ -429,11 +432,30 @@ public class GoBoard {
         // 修正：设置当前手数时需要重置棋盘
         currentMoveNumber = Math.min(Math.max(number, -1), moveHistory.size()-1);
         resetBoardToCurrentMove();
+        // When at start of game (currentMoveNumber = -1), set player to black (1)
+        // Unless there are setup stones, in which case keep the current player
+        if (currentMoveNumber == -1) {
+            // Check if there are setup stones by examining initialBoard
+            boolean hasSetupStones = false;
+            for (int i = 0; i < BOARD_SIZE; i++) {
+                for (int j = 0; j < BOARD_SIZE; j++) {
+                    if (initialBoard[i][j] != 0) {
+                        hasSetupStones = true;
+                        break;
+                    }
+                }
+                if (hasSetupStones) break;
+            }
+            // Only set to black if there are no setup stones
+            if (!hasSetupStones) {
+                currentPlayer = 1; // Black's turn at start
+            }
+        }
     }
     
     public boolean previousMove() {
-        if (currentMoveNumber >= 0) {  // 修改为currentMoveNumber
-            currentMoveNumber--;       // 修改为currentMoveNumber
+        if (currentMoveNumber >= 0) {
+            currentMoveNumber--;
             resetBoardToCurrentMove();
             return true;
         }
@@ -441,14 +463,11 @@ public class GoBoard {
     }
     
     public boolean nextMove() {
-        if (currentMoveNumber < 0 && hasStartVariations()) {
-            return false;
-        }
         if (currentMoveNumber >= moveHistory.size() - 1) {
             return false;
         }
         currentMoveNumber++;
-        resetBoardToCurrentMove();  // 确保调用这个方法
+        resetBoardToCurrentMove();
         return true;
     }
     

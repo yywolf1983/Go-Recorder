@@ -86,15 +86,6 @@ public class SGFParser {
         List<List<Node>> trees = p.parseCollection();
         if (trees.isEmpty()) return;
         
-        // Sabaki风格：完全按照Sabaki的逻辑处理
-        // 第一个根分支作为主分支，其他根分支作为第一个Move的variations
-        
-        // 从第一个根分支应用头信息和初始设置
-        List<Node> firstTree = trees.get(0);
-        applyHeader(firstTree, board);
-        applyRootSetup(firstTree, board);
-        board.snapshotInitialSetup();
-        
         // 解析所有根分支为Move列表
         List<List<GoBoard.Move>> allRootMoves = new java.util.ArrayList<>();
         for (List<Node> tree : trees) {
@@ -102,29 +93,47 @@ public class SGFParser {
             allRootMoves.add(moves);
         }
         
+        // 寻找默认路线：选择最长的根分支作为主分支
+        int mainTreeIndex = 0;
+        int maxLength = 0;
+        for (int i = 0; i < allRootMoves.size(); i++) {
+            int length = getTotalMoves(allRootMoves.get(i));
+            if (length > maxLength) {
+                maxLength = length;
+                mainTreeIndex = i;
+            }
+        }
+        
+        // 从默认主分支应用头信息和初始设置
+        List<Node> mainTree = trees.get(mainTreeIndex);
+        applyHeader(mainTree, board);
+        applyRootSetup(mainTree, board);
+        board.snapshotInitialSetup();
+        
         // 构建主分支
         List<GoBoard.Move> mainMoves = new java.util.ArrayList<>();
         
-        // 如果第一个根分支有实际棋步，使用它作为主分支
-        if (!allRootMoves.get(0).isEmpty()) {
-            mainMoves.addAll(allRootMoves.get(0));
+        // 使用默认主分支作为主分支
+        if (!allRootMoves.get(mainTreeIndex).isEmpty()) {
+            mainMoves.addAll(allRootMoves.get(mainTreeIndex));
         } else {
-            // 如果第一个根分支为空，创建一个虚手Move作为容器
+            // 如果默认主分支为空，创建一个虚手Move作为容器
             GoBoard.Move emptyMove = new GoBoard.Move(-1, -1, 1);
             mainMoves.add(emptyMove);
         }
         
         // 将其他根分支作为第一个Move的variations
-        for (int i = 1; i < allRootMoves.size(); i++) {
+        for (int i = 0; i < allRootMoves.size(); i++) {
+            if (i == mainTreeIndex) continue; // 跳过主分支
             List<GoBoard.Move> rootMoves = allRootMoves.get(i);
             if (!rootMoves.isEmpty()) {
                 mainMoves.get(0).variations.add(rootMoves);
             }
         }
         
-        // 如果第一个根分支本身有variations，也要添加到第一个Move
-        if (!firstTree.isEmpty() && firstTree.get(0).variations != null && !firstTree.get(0).variations.isEmpty()) {
-            for (List<Node> var : firstTree.get(0).variations) {
+        // 如果默认主分支本身有variations，也要添加到第一个Move
+        if (!mainTree.isEmpty() && mainTree.get(0).variations != null && !mainTree.get(0).variations.isEmpty()) {
+            for (List<Node> var : mainTree.get(0).variations) {
                 List<GoBoard.Move> varMoves = toMovesDeep(var);
                 if (!varMoves.isEmpty()) {
                     mainMoves.get(0).variations.add(varMoves);
@@ -133,7 +142,20 @@ public class SGFParser {
         }
         
         board.setMoveHistory(mainMoves);
+        // Set to start of game when loading (no moves should be displayed)
         board.setCurrentMoveNumber(-1);
+    }
+    
+    // 计算分支的总手数（包括所有子分支）
+    private static int getTotalMoves(List<GoBoard.Move> moves) {
+        if (moves == null || moves.isEmpty()) return 0;
+        int count = moves.size();
+        for (GoBoard.Move move : moves) {
+            for (List<GoBoard.Move> variation : move.variations) {
+                count += getTotalMoves(variation);
+            }
+        }
+        return count;
     }
 
     private static String escapeSGFText(String text) {

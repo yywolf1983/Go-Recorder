@@ -228,6 +228,31 @@ public class BoardView extends View {
             }
         }
         
+        // Draw next move position if it exists
+        if (board != null) {
+            int currentMoveNumber = board.getCurrentMoveNumber();
+            List<GoBoard.Move> moveHistory = board.getMoveHistory();
+            if (moveHistory != null && currentMoveNumber + 1 < moveHistory.size()) {
+                GoBoard.Move nextMove = moveHistory.get(currentMoveNumber + 1);
+                if (nextMove != null && nextMove.x >= 0 && nextMove.y >= 0) {
+                    float cx = startX + nextMove.x * gridSize;
+                    float cy = startY + nextMove.y * gridSize;
+                    // Draw next move marker
+                    Paint nextMovePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    nextMovePaint.setStyle(Paint.Style.STROKE);
+                    nextMovePaint.setColor(Color.GREEN);
+                    nextMovePaint.setStrokeWidth(2f);
+                    canvas.drawCircle(cx, cy, stoneRadius * 0.8f, nextMovePaint);
+                    // Draw "下" label for next move
+                    Paint nextMoveLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    nextMoveLabelPaint.setColor(Color.GREEN);
+                    nextMoveLabelPaint.setTextSize(stoneRadius * 0.6f);
+                    nextMoveLabelPaint.setTextAlign(Paint.Align.CENTER);
+                    canvas.drawText("下", cx, cy + (nextMoveLabelPaint.getTextSize() * 0.35f), nextMoveLabelPaint);
+                }
+            }
+        }
+        
         if (board != null) {
             GoBoard.Move cm = board.getCurrentMove();
             if (cm != null && cm.variations != null && !cm.variations.isEmpty()) {
