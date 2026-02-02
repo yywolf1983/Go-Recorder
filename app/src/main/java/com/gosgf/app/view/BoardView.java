@@ -57,6 +57,14 @@ public class BoardView extends View {
     private float lastTouchY;
     private boolean isDragging = false;
     
+    // 长按删除分支相关
+    private int longPressVariationIndex = -1;
+    private boolean isLongPressVariationStart = false;
+    private boolean isVariationClick = false; // 记录是否点击了分支提示
+    private boolean isLongPressTriggered = false; // 记录是否触发了长按
+    private static final long LONG_PRESS_TIMEOUT = 500; // 长按时间阈值（毫秒）
+    private Runnable longPressRunnable;
+    
     public BoardView(Context context, AttributeSet attrs) {
         super(context, attrs);
         init();
@@ -448,6 +456,98 @@ public class BoardView extends View {
                 lastTouchX = event.getX();
                 lastTouchY = event.getY();
                 isDragging = false;
+                isVariationClick = false;
+                isLongPressTriggered = false;
+                
+                // 检查是否点击了分支提示，启动长按计时器
+                longPressVariationIndex = -1;
+                isLongPressVariationStart = false;
+                if (board != null) {
+                    float x = event.getX();
+                    float y = event.getY();
+                    
+                    GoBoard.Move cm = board.getCurrentMove();
+                    if (cm != null && cm.variations != null && !cm.variations.isEmpty()) {
+                        for (int i = 0; i < cm.variations.size(); i++) {
+                            GoBoard.Variation variation = cm.variations.get(i);
+                            List<GoBoard.Move> var = variation.getMoves();
+                            if (var != null && !var.isEmpty()) {
+                                GoBoard.Move vm = var.get(0);
+                                if (vm.x >= 0 && vm.y >= 0) {
+                                    float cx = startX + vm.x * gridSize;
+                                    float cy = startY + vm.y * gridSize;
+                                    float r = Math.max(stoneRadius * 0.85f, gridSize * 0.4f);
+                                    float dx = x - cx;
+                                    float dy = y - cy;
+                                    if (dx * dx + dy * dy <= r * r) {
+                                        isVariationClick = true;
+                                        longPressVariationIndex = i;
+                                        isLongPressVariationStart = true;
+                                        // 启动长按计时器
+                                        longPressRunnable = new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                if (isLongPressVariationStart && longPressVariationIndex >= 0) {
+                                                    // 长按触发，显示确认对话框
+                                                    isLongPressTriggered = true;
+                                                    if (getContext() instanceof MainActivity) {
+                                                        MainActivity activity = (MainActivity) getContext();
+                                                        activity.showDeleteVariationConfirmDialog(longPressVariationIndex, false);
+                                                    }
+                                                    isLongPressVariationStart = false;
+                                                    longPressVariationIndex = -1;
+                                                }
+                                            }
+                                        };
+                                        postDelayed(longPressRunnable, LONG_PRESS_TIMEOUT);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } else if (cm == null) {
+                        // 检查起始状态的分支
+                        if (board.hasStartVariations()) {
+                            List<List<GoBoard.Move>> startVariations = board.getStartVariations();
+                            for (int i = 0; i < startVariations.size(); i++) {
+                                List<GoBoard.Move> var = startVariations.get(i);
+                                if (var != null && !var.isEmpty()) {
+                                    GoBoard.Move vm = var.get(0);
+                                    if (vm.x >= 0 && vm.y >= 0) {
+                                        float cx = startX + vm.x * gridSize;
+                                        float cy = startY + vm.y * gridSize;
+                                        float r = Math.max(stoneRadius * 0.85f, gridSize * 0.4f);
+                                        float dx = x - cx;
+                                        float dy = y - cy;
+                                        if (dx * dx + dy * dy <= r * r) {
+                                            isVariationClick = true;
+                                            longPressVariationIndex = i;
+                                            isLongPressVariationStart = true;
+                                            // 启动长按计时器
+                                            longPressRunnable = new Runnable() {
+                                                @Override
+                                                public void run() {
+                                                    if (isLongPressVariationStart && longPressVariationIndex >= 0) {
+                                                        // 长按触发，显示确认对话框
+                                                        isLongPressTriggered = true;
+                                                        if (getContext() instanceof MainActivity) {
+                                                            MainActivity activity = (MainActivity) getContext();
+                                                            activity.showDeleteVariationConfirmDialog(longPressVariationIndex, true);
+                                                        }
+                                                        isLongPressVariationStart = false;
+                                                        longPressVariationIndex = -1;
+                                                    }
+                                                }
+                                            };
+                                            postDelayed(longPressRunnable, LONG_PRESS_TIMEOUT);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 break;
             case MotionEvent.ACTION_MOVE:
                 // 检查是否正在缩放
@@ -458,6 +558,14 @@ public class BoardView extends View {
                     // 检查是否是拖动
                     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
                         isDragging = true;
+                        // 取消长按计时器
+                        if (longPressRunnable != null) {
+                            removeCallbacks(longPressRunnable);
+                            longPressRunnable = null;
+                        }
+                        isLongPressVariationStart = false;
+                        longPressVariationIndex = -1;
+                        
                         // 平移棋盘
                         translationX += dx;
                         translationY += dy;
@@ -468,10 +576,23 @@ public class BoardView extends View {
                 lastTouchY = event.getY();
                 break;
             case MotionEvent.ACTION_UP:
+                // 取消长按计时器
+                if (longPressRunnable != null) {
+                    removeCallbacks(longPressRunnable);
+                    longPressRunnable = null;
+                }
+                isLongPressVariationStart = false;
+                
                 // 如果不是拖动，则认为是点击
                 if (!isDragging) {
                     float x = event.getX();
                     float y = event.getY();
+                    
+                    // 如果触发了长按，不执行任何操作
+                    if (isLongPressTriggered) {
+                        isLongPressTriggered = false;
+                        return true;
+                    }
                     
                     // 优先检测分支提示点击
                     if (board != null) {
@@ -541,7 +662,7 @@ public class BoardView extends View {
                     }
                     
                     // 检查点击是否在棋盘范围内
-                    if (x >= startX && x <= startX + gridSize * (BOARD_SIZE-1) &&
+                    if (!isVariationClick && x >= startX && x <= startX + gridSize * (BOARD_SIZE-1) &&
                         y >= startY && y <= startY + gridSize * (BOARD_SIZE-1)) {
                         
                         // 转换为棋盘坐标

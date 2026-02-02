@@ -346,6 +346,52 @@ public class MainActivity extends AppCompatActivity {
             .show();
     }
     
+    public void showDeleteVariationConfirmDialog(int index, boolean isStartVariation) {
+        GoBoard board = boardView.getBoard();
+        String variationName = "";
+        
+        if (isStartVariation) {
+            List<List<GoBoard.Move>> startVariations = board.getStartVariations();
+            if (index >= 0 && index < startVariations.size()) {
+                GoBoard.Variation variation = board.getStartVariation(index);
+                if (variation != null) {
+                    variationName = variation.getName();
+                }
+            }
+        } else {
+            if (board.getCurrentMoveNumber() >= 0) {
+                GoBoard.Move current = board.getMoveHistory().get(board.getCurrentMoveNumber());
+                if (current != null && index >= 0 && index < current.variations.size()) {
+                    GoBoard.Variation variation = current.variations.get(index);
+                    if (variation != null) {
+                        variationName = variation.getName();
+                    }
+                }
+            }
+        }
+        
+        new AlertDialog.Builder(this)
+            .setTitle("确认删除")
+            .setMessage("确定要删除分支\"" + variationName + "\"吗？")
+            .setPositiveButton("确定", (dialog, which) -> {
+                boolean success = false;
+                if (isStartVariation) {
+                    success = board.removeStartVariation(index);
+                } else {
+                    success = board.removeCurrentVariation(index);
+                }
+                
+                if (success) {
+                    boardView.invalidateBoard();
+                    updateGameInfo();
+                    updateCommentDisplay();
+                    Toast.makeText(this, "分支已删除", Toast.LENGTH_SHORT).show();
+                }
+            })
+            .setNegativeButton("取消", null)
+            .show();
+    }
+    
     // 所有分支选择相关的弹出窗口已移除，分支操作直接在棋盘上完成
     
 

@@ -783,6 +783,24 @@ public class GoBoard {
         startVariations.add(new Variation(moves, name));
     }
     
+    public boolean removeStartVariation(int index) {
+        if (startVariations.isEmpty()) return false;
+        if (index < 0 || index >= startVariations.size()) return false;
+        startVariations.remove(index);
+        return true;
+    }
+    
+    public boolean removeCurrentVariation(int index) {
+        if (currentMoveNumber < 0 || currentMoveNumber >= moveHistory.size()) {
+            return false;
+        }
+        Move current = moveHistory.get(currentMoveNumber);
+        if (current.variations.isEmpty()) return false;
+        if (index < 0 || index >= current.variations.size()) return false;
+        current.variations.remove(index);
+        return true;
+    }
+    
     public boolean selectVariation(int index) {
         // 起始态选择分支：直接将主线替换为选择的分支，定位到分支第一步
         if (currentMoveNumber < 0) {
@@ -1016,6 +1034,13 @@ public class GoBoard {
             result.add(variation.getMoves());
         }
         return result;
+    }
+    
+    public Variation getStartVariation(int index) {
+        if (index < 0 || index >= startVariations.size()) {
+            return null;
+        }
+        return startVariations.get(index);
     }
 
 
