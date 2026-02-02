@@ -13,9 +13,13 @@ jobs:
     - uses: actions/checkout@v2
     
     - name: Set up JDK
-      uses: actions/setup-java@v1
+      uses: actions/setup-java@v3
       with:
-        java-version: '17'
+        java-version: '21'
+        distribution: 'adopt'
+    
+    - name: Set Gradle version
+      run: ./gradlew wrapper --gradle-version 8.4 --distribution-type all
     
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
