@@ -189,6 +189,18 @@ public class SGFParser {
             saveNode(node, sb);
         }
         
+        // 保存根节点分支
+        List<List<Node>> rootVariations = tree.getRootVariations();
+        if (rootVariations != null && !rootVariations.isEmpty()) {
+            for (List<Node> variation : rootVariations) {
+                sb.append("(");
+                for (Node node : variation) {
+                    saveNode(node, sb);
+                }
+                sb.append(")");
+            }
+        }
+        
         sb.append(")");
         return sb.toString();
     }

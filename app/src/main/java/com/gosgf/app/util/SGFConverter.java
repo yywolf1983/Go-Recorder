@@ -179,15 +179,31 @@ public class SGFConverter {
             rootNode.addProperty("RE", result);
         }
         
-        // 创建主序列
+        // 检查是否有起始分支
+        List<List<SGFParser.Node>> rootVariations = null;
         List<SGFParser.Node> mainSequence = new ArrayList<>();
         List<GoBoard.Move> moveHistory = board.getMoveHistory();
         
-        for (GoBoard.Move move : moveHistory) {
-            mainSequence.add(moveToNode(move));
+        if (board.hasStartVariations()) {
+            // 多分支棋局：将所有起始分支保存到 rootVariations
+            rootVariations = new ArrayList<>();
+            
+            List<List<GoBoard.Move>> startVariations = board.getStartVariations();
+            for (List<GoBoard.Move> variationMoves : startVariations) {
+                List<SGFParser.Node> variationNodes = new ArrayList<>();
+                for (GoBoard.Move move : variationMoves) {
+                    variationNodes.add(moveToNode(move));
+                }
+                rootVariations.add(variationNodes);
+            }
+        } else {
+            // 普通棋局：将 moveHistory 作为主序列保存
+            for (GoBoard.Move move : moveHistory) {
+                mainSequence.add(moveToNode(move));
+            }
         }
         
-        return new SGFParser.SGFTree(rootNode, mainSequence);
+        return new SGFParser.SGFTree(rootNode, mainSequence, rootVariations);
     }
     
     /**
