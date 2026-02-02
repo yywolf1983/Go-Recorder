@@ -131,12 +131,15 @@ public class SGFConverter {
                 }
             }
             
+            // 解析根节点下的分支（第一手分支）
+            if (sgfTree.hasRootVariations()) {
+                parseRootVariationsToBoard(sgfTree.getRootVariations(), board);
+            }
+            
             // 解析主序列
             List<SGFParser.Node> mainSequence = sgfTree.getMainSequence();
-            if (mainSequence != null) {
+            if (mainSequence != null && !mainSequence.isEmpty()) {
                 parseSequenceToBoard(mainSequence, board);
-            } else {
-                System.err.println("SGF转换错误: 空的主序列");
             }
         } catch (Exception e) {
             System.err.println("SGF转换错误: " + e.getMessage());
@@ -411,6 +414,26 @@ public class SGFConverter {
     }
     
     /**
+     * 解析根节点下的分支到棋盘（第一手分支）
+     * @param rootVariations 根节点下的分支列表
+     * @param board GoBoard对象
+     */
+    private static void parseRootVariationsToBoard(List<List<SGFParser.Node>> rootVariations, GoBoard board) {
+        if (rootVariations == null || rootVariations.isEmpty()) {
+            return;
+        }
+        
+        for (List<SGFParser.Node> variation : rootVariations) {
+            List<GoBoard.Move> moves = new ArrayList<>();
+            parseVariationToMoves(variation, moves);
+            if (!moves.isEmpty()) {
+                String branchName = "分支 " + (board.getStartVariationsCount() + 1);
+                board.addStartVariation(moves, branchName);
+            }
+        }
+    }
+    
+    /**
      * 解析节点序列到棋盘
      * @param nodes 节点列表
      * @param board GoBoard对象
@@ -419,7 +442,7 @@ public class SGFConverter {
         for (SGFParser.Node node : nodes) {
             GoBoard.Move move = nodeToMove(node);
             if (move != null) {
-                board.getMoveHistory().add(move);
+                board.addMoveToHistory(move);
                 
                 // 解析分支
                 List<List<SGFParser.Node>> variations = node.getVariations();

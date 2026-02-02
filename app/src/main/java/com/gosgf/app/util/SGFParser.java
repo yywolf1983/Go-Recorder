@@ -96,10 +96,18 @@ public class SGFParser {
     public static class SGFTree {
         private final Node rootNode;
         private final List<Node> mainSequence;
+        private final List<List<Node>> rootVariations;
         
         public SGFTree(Node rootNode, List<Node> mainSequence) {
             this.rootNode = rootNode;
             this.mainSequence = mainSequence;
+            this.rootVariations = new ArrayList<>();
+        }
+        
+        public SGFTree(Node rootNode, List<Node> mainSequence, List<List<Node>> rootVariations) {
+            this.rootNode = rootNode;
+            this.mainSequence = mainSequence;
+            this.rootVariations = rootVariations != null ? rootVariations : new ArrayList<>();
         }
         
         /**
@@ -116,6 +124,22 @@ public class SGFParser {
          */
         public List<Node> getMainSequence() {
             return mainSequence;
+        }
+        
+        /**
+         * 获取根节点下的分支列表
+         * @return 根节点下的分支列表
+         */
+        public List<List<Node>> getRootVariations() {
+            return rootVariations;
+        }
+        
+        /**
+         * 检查是否有根节点分支
+         * @return 是否有根节点分支
+         */
+        public boolean hasRootVariations() {
+            return !rootVariations.isEmpty();
         }
         
         /**
@@ -214,10 +238,12 @@ public class SGFParser {
     private static class Parser {
         private final String input;
         private int position;
+        private final List<List<Node>> rootVariations;
         
         public Parser(String input) {
             this.input = input;
             this.position = 0;
+            this.rootVariations = new ArrayList<>();
         }
         
         /**
@@ -231,23 +257,55 @@ public class SGFParser {
                 throw new SGFParseException("Expected '(' at start of SGF tree");
             }
             
-            List<Node> gameTree = parseGameTree();
+            position++; // 跳过开始的'('
             
-            if (gameTree.isEmpty()) {
-                throw new SGFParseException("Empty game tree");
+            // 解析根节点
+            Node rootNode = parseNode();
+            
+            // 解析主序列
+            List<Node> mainSequence = new ArrayList<>();
+            
+            // 继续解析，可能还有主序列节点或根节点分支
+            while (position < input.length()) {
+                char current = input.charAt(position);
+                
+                if (current == ';') {
+                    // 解析主序列节点
+                    Node node = parseNode();
+                    mainSequence.add(node);
+                } else if (current == '(') {
+                    // 解析分支
+                    List<Node> variation = parseGameTree(false);
+                    if (!mainSequence.isEmpty()) {
+                        // 如果主序列不为空，将分支添加到主序列的最后一个节点
+                        Node lastNode = mainSequence.get(mainSequence.size() - 1);
+                        lastNode.addVariation(variation);
+                    } else {
+                        // 如果主序列为空，说明这是根节点下的分支
+                        rootVariations.add(variation);
+                    }
+                } else if (current == ')') {
+                    // SGF结束
+                    position++;
+                    break;
+                } else if (Character.isWhitespace(current)) {
+                    // 跳过空白字符
+                    skipWhitespace();
+                } else {
+                    // 其他字符，跳过
+                    position++;
+                }
             }
             
-            Node rootNode = gameTree.get(0);
-            List<Node> mainSequence = gameTree.subList(1, gameTree.size());
-            
-            return new SGFTree(rootNode, mainSequence);
+            return new SGFTree(rootNode, mainSequence, rootVariations);
         }
         
         /**
          * 解析游戏树
          * 对应BNF中的<sequence>
+         * @param isRootLevel 是否是根级别解析（用于处理根节点下的多个分支）
          */
-        private List<Node> parseGameTree() throws SGFParseException {
+        private List<Node> parseGameTree(boolean isRootLevel) throws SGFParseException {
             position++;
             List<Node> sequence = new ArrayList<>();
             
@@ -260,10 +318,14 @@ public class SGFParser {
                     sequence.add(node);
                 } else if (current == '(') {
                     // 解析分支
-                    List<Node> variation = parseGameTree();
+                    List<Node> variation = parseGameTree(false);
                     if (!sequence.isEmpty()) {
+                        // 如果有节点，将分支添加到最后一个节点
                         Node lastNode = sequence.get(sequence.size() - 1);
                         lastNode.addVariation(variation);
+                    } else if (isRootLevel) {
+                        // 如果是根级别且没有节点，说明这是根节点下的分支
+                        rootVariations.add(variation);
                     }
                 } else if (current == ')') {
                     // 分支结束
@@ -557,93 +619,11 @@ public class SGFParser {
      * 向后兼容方法：解析SGF字符串并加载到棋盘
      * @param sgf SGF字符串
      * @param board GoBoard对象
-     * @throws InvalidSGFException 解析异常
+     * @throws SGFParseException 解析异常
      */
     public static void parseSGF(String sgf, com.gosgf.app.model.GoBoard board) throws SGFParseException {
-        try {
-            SGFTree sgfTree = parse(sgf);
-            
-            // 解析根节点的头信息
-            Node rootNode = sgfTree.getRootNode();
-            if (rootNode != null) {
-                String pb = rootNode.getFirstPropertyValue("PB");
-                String pw = rootNode.getFirstPropertyValue("PW");
-                String re = rootNode.getFirstPropertyValue("RE");
-                String dt = rootNode.getFirstPropertyValue("DT");
-                
-                if (pb != null) board.setBlackPlayer(pb);
-                if (pw != null) board.setWhitePlayer(pw);
-                if (re != null) board.setResult(re);
-                if (dt != null) board.setDate(dt);
-                
-                // 解析让子信息
-                String handicap = rootNode.getFirstPropertyValue("HA");
-                if (handicap != null) {
-                    try {
-                        int hc = Integer.parseInt(handicap);
-                        if (hc > 0 && hc <= 9) {
-                            parseHandicapStones(rootNode, board, hc);
-                        }
-                    } catch (NumberFormatException e) {
-                        // 忽略无效的让子数
-                    }
-                } else {
-                    // 检查是否有明确的让子坐标
-                    List<String> blackStones = rootNode.getPropertyValues("AB");
-                    List<String> whiteStones = rootNode.getPropertyValues("AW");
-                    if (!blackStones.isEmpty() || !whiteStones.isEmpty()) {
-                        parseHandicapStones(rootNode, board, 0);
-                    }
-                }
-            }
-            
-            // 解析主序列
-            List<Node> mainSequence = sgfTree.getMainSequence();
-            
-            // 如果主序列为空，检查根节点是否有分支
-            if (mainSequence.isEmpty() && rootNode != null && rootNode.hasVariations()) {
-                // 获取根节点的所有分支
-                List<List<Node>> rootVariations = rootNode.getVariations();
-                if (!rootVariations.isEmpty()) {
-                    // 解析所有分支，添加到startVariations中
-                    for (int i = 0; i < rootVariations.size(); i++) {
-                        List<com.gosgf.app.model.GoBoard.Move> varMoves = new ArrayList<>();
-                        parseSequenceToMoveList(rootVariations.get(i), varMoves);
-                        if (!varMoves.isEmpty()) {
-                            // 将分支添加到startVariations中
-                            com.gosgf.app.model.GoBoard.Variation variation = new com.gosgf.app.model.GoBoard.Variation(varMoves, "分支 " + i);
-                            // 使用反射获取startVariations字段并添加分支
-                            try {
-                                java.lang.reflect.Field field = com.gosgf.app.model.GoBoard.class.getDeclaredField("startVariations");
-                                field.setAccessible(true);
-                                java.util.List<com.gosgf.app.model.GoBoard.Variation> startVariations = (java.util.List<com.gosgf.app.model.GoBoard.Variation>) field.get(board);
-                                startVariations.add(variation);
-                            } catch (Exception e) {
-                                // 忽略反射异常
-                            }
-                        }
-                    }
-                    
-                    // 不设置moveHistory，让用户通过点击"下一步"选择分支
-                    // 清空moveHistory，确保currentMoveNumber为-1
-                    try {
-                        java.lang.reflect.Field field = com.gosgf.app.model.GoBoard.class.getDeclaredField("moveHistory");
-                        field.setAccessible(true);
-                        java.util.List<com.gosgf.app.model.GoBoard.Move> moveHistory = (java.util.List<com.gosgf.app.model.GoBoard.Move>) field.get(board);
-                        moveHistory.clear();
-                    } catch (Exception e) {
-                        // 忽略反射异常
-                    }
-                    
-                    return; // 提前返回，因为已经处理了所有分支
-                }
-            }
-            
-            parseSequenceToBoard(mainSequence, board);
-            
-        } catch (SGFParseException e) {
-            throw e;
-        }
+        SGFTree sgfTree = parse(sgf);
+        SGFConverter.sgfTreeToBoard(sgfTree, board);
     }
     
     /**

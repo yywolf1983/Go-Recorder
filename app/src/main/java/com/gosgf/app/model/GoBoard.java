@@ -481,6 +481,10 @@ public class GoBoard {
         return Collections.unmodifiableList(moveHistory);
     }
     
+    public void addMoveToHistory(Move move) {
+        moveHistory.add(move);
+    }
+    
     public void setMoveHistory(List<Move> moves) {
         moveHistory = new ArrayList<>(moves);
         currentMoveNumber = -1; // 加载棋局时指针停留在第一手前
@@ -740,6 +744,14 @@ public class GoBoard {
     
     public boolean hasStartVariations() {
         return !startVariations.isEmpty();
+    }
+    
+    public int getStartVariationsCount() {
+        return startVariations.size();
+    }
+    
+    public void addStartVariation(List<Move> moves, String name) {
+        startVariations.add(new Variation(moves, name));
     }
     
     public boolean selectVariation(int index) {
