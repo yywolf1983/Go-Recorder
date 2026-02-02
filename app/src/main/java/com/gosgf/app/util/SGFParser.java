@@ -605,9 +605,6 @@ public class SGFParser {
                 // 获取根节点的所有分支
                 List<List<Node>> rootVariations = rootNode.getVariations();
                 if (!rootVariations.isEmpty()) {
-                    // 将第一个分支作为主序列
-                    mainSequence = rootVariations.get(0);
-                    
                     // 解析所有分支，添加到startVariations中
                     for (int i = 0; i < rootVariations.size(); i++) {
                         List<com.gosgf.app.model.GoBoard.Move> varMoves = new ArrayList<>();
@@ -627,23 +624,15 @@ public class SGFParser {
                         }
                     }
                     
-                    // 解析主序列，获取对应的移动
-                    List<com.gosgf.app.model.GoBoard.Move> moveHistory = new ArrayList<>();
-                    parseSequenceToMoveList(mainSequence, moveHistory);
-                    
-                    // 将主序列设置到棋盘
-                    board.setMoveHistory(moveHistory);
-                    
-                    // 处理剩余的分支
-                    if (!moveHistory.isEmpty()) {
-                        com.gosgf.app.model.GoBoard.Move firstMove = moveHistory.get(0);
-                        for (int i = 1; i < rootVariations.size(); i++) {
-                            List<com.gosgf.app.model.GoBoard.Move> varMoves = new ArrayList<>();
-                            parseSequenceToMoveList(rootVariations.get(i), varMoves);
-                            if (!varMoves.isEmpty()) {
-                                firstMove.addVariation(varMoves, "分支 " + firstMove.variations.size());
-                            }
-                        }
+                    // 不设置moveHistory，让用户通过点击"下一步"选择分支
+                    // 清空moveHistory，确保currentMoveNumber为-1
+                    try {
+                        java.lang.reflect.Field field = com.gosgf.app.model.GoBoard.class.getDeclaredField("moveHistory");
+                        field.setAccessible(true);
+                        java.util.List<com.gosgf.app.model.GoBoard.Move> moveHistory = (java.util.List<com.gosgf.app.model.GoBoard.Move>) field.get(board);
+                        moveHistory.clear();
+                    } catch (Exception e) {
+                        // 忽略反射异常
                     }
                     
                     return; // 提前返回，因为已经处理了所有分支

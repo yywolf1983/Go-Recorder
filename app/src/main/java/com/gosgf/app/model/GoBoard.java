@@ -605,6 +605,20 @@ public class GoBoard {
     }
     
     public boolean nextMove() {
+        // 起始态：如果有起始分支，选择第一个分支
+        if (currentMoveNumber < 0) {
+            if (!startVariations.isEmpty()) {
+                return selectVariation(0);
+            }
+            // 如果没有起始分支，检查 moveHistory
+            if (!moveHistory.isEmpty()) {
+                currentMoveNumber = 0;
+                resetBoardToCurrentMove();
+                return true;
+            }
+            return false;
+        }
+        
         // 检查是否可以继续前进
         boolean canContinue = currentMoveNumber < moveHistory.size() - 1;
         
@@ -620,52 +634,12 @@ public class GoBoard {
             return false;
         }
         
-        // 检查当前手是否有分支
-        if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size()) {
-            Move currentMove = moveHistory.get(currentMoveNumber);
-            if (!currentMove.variations.isEmpty()) {
-                // 当前手有分支，自动选择第一个分支（左侧分支）
-                Variation firstVariation = currentMove.variations.get(0);
-                List<Move> varMoves = firstVariation.getMoves();
-                if (!varMoves.isEmpty()) {
-                    // 保存当前的后续移动作为一个分支
-                    if (currentMoveNumber < moveHistory.size() - 1) {
-                        List<Move> currentRemainder = new ArrayList<>(moveHistory.subList(currentMoveNumber + 1, moveHistory.size()));
-                        if (!currentRemainder.isEmpty()) {
-                            // 检查是否已存在相同的分支
-                            boolean exists = false;
-                            for (Variation existingVar : currentMove.variations) {
-                                List<Move> existingMoves = existingVar.getMoves();
-                                if (existingMoves.size() == currentRemainder.size()) {
-                                    boolean same = true;
-                                    for (int i = 0; i < existingMoves.size(); i++) {
-                                        Move existingMove = existingMoves.get(i);
-                                        Move currentMoveInRemainder = currentRemainder.get(i);
-                                        if (existingMove.x != currentMoveInRemainder.x || existingMove.y != currentMoveInRemainder.y || existingMove.color != currentMoveInRemainder.color) {
-                                            same = false;
-                                            break;
-                                        }
-                                    }
-                                    if (same) {
-                                        exists = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (!exists) {
-                                currentMove.variations.add(new Variation(currentRemainder, "分支"));
-                            }
-                        }
-                    }
-                    
-                    // 将选择的分支添加到主线
-                    List<Move> prefix = new ArrayList<>(moveHistory.subList(0, currentMoveNumber + 1));
-                    moveHistory = prefix;
-                    moveHistory.addAll(varMoves);
-                }
-            }
+        // 如果有分支，选择第一个分支
+        if (hasBranch) {
+            return selectVariation(0);
         }
         
+        // 直接前进到下一步
         currentMoveNumber++;
         resetBoardToCurrentMove();
         return true;

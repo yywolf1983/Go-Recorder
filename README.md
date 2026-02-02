@@ -57,5 +57,7 @@ emulator -avd Pixel_9_Pro_API_33
 ## TODO
 
 TODO 没有考虑让子的情况，这个应该以后也不会考虑。
-SGF 规范
+TODO 虚手按钮有没有实现功能。基本上不用。
+
+##SGF 规范
 https://www.red-bean.com/sgf/properties.html#CA
