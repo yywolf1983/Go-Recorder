@@ -117,9 +117,14 @@ public class SGFConverter {
                 
                 // 解析让子信息
                 String handicap = rootNode.getFirstPropertyValue("HA");
-                if (handicap != null) {
+                List<String> blackStones = rootNode.getPropertyValues("AB");
+                List<String> whiteStones = rootNode.getPropertyValues("AW");
+                
+                boolean hasHandicap = (handicap != null) || !blackStones.isEmpty() || !whiteStones.isEmpty();
+                
+                if (hasHandicap) {
                     try {
-                        int hc = Integer.parseInt(handicap);
+                        int hc = handicap != null ? Integer.parseInt(handicap) : blackStones.size();
                         if (hc > 0 && hc <= 9) {
                             parseHandicapStones(rootNode, board, hc);
                         } else {
@@ -311,6 +316,9 @@ public class SGFConverter {
                     }
                 }
             }
+            
+            // 保存让子信息到initialBoard
+            board.snapshotInitialSetup();
         } catch (Exception e) {
             System.err.println("解析让子错误: " + e.getMessage());
             e.printStackTrace();

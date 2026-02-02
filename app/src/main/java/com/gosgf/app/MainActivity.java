@@ -167,6 +167,8 @@ public class MainActivity extends AppCompatActivity {
             }
             
             try {
+                boardView.getBoard().resetGame();
+                
                 SGFParser.parseSGF(sb.toString(), boardView.getBoard());
                 boardView.invalidateBoard();
                 updateGameInfo();
@@ -198,15 +200,7 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void saveSGF(Uri uri) {
-        // 添加保存确认对话框
-        new AlertDialog.Builder(this)
-            .setTitle("确认保存")
-            .setMessage("确定要保存棋局吗？如果文件已存在，将被覆盖。")
-            .setPositiveButton("确定", (dialog, which) -> {
-                doSaveSGF(uri);
-            })
-            .setNegativeButton("取消", null)
-            .show();
+        doSaveSGF(uri);
     }
     
     private void doSaveSGF(Uri uri) {
@@ -241,6 +235,13 @@ public class MainActivity extends AppCompatActivity {
             String[] mimeTypes = {"application/sgf", "text/plain", "*/*"};
             intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
             intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+            // 设置默认文件名
+            GoBoard board = boardView.getBoard();
+            String defaultFileName = "game.sgf";
+            if (board != null && !board.getBlackPlayer().isEmpty()) {
+                defaultFileName = board.getBlackPlayer() + "_vs_" + board.getWhitePlayer() + ".sgf";
+            }
+            intent.putExtra(Intent.EXTRA_TITLE, defaultFileName);
             createDocumentLauncher.launch(intent);
         }
     }
