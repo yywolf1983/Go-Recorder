@@ -167,8 +167,7 @@ public class MainActivity extends AppCompatActivity {
             }
             
             try {
-                boardView.getBoard().resetGame();
-                
+                // 不调用 resetGame()，直接解析 SGF，这样不会清空 startVariations
                 SGFParser.parseSGF(sb.toString(), boardView.getBoard());
                 boardView.invalidateBoard();
                 updateGameInfo();
@@ -359,6 +358,13 @@ public class MainActivity extends AppCompatActivity {
                 boardView.invalidateBoard();
                 updateGameInfo();
                 updateCommentDisplay();
+            } else {
+                // 落子失败，检查原因并给出提示
+                if (board.getStone(x, y) != 0) {
+                    Toast.makeText(this, "该位置已有棋子", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "落子失败", Toast.LENGTH_SHORT).show();
+                }
             }
         }
     }
