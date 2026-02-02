@@ -146,6 +146,18 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void loadSGF(Uri uri) {
+        // 添加加载确认对话框
+        new AlertDialog.Builder(this)
+            .setTitle("确认加载")
+            .setMessage("确定要加载这个SGF文件吗？当前棋局将被替换。")
+            .setPositiveButton("确定", (dialog, which) -> {
+                doLoadSGF(uri);
+            })
+            .setNegativeButton("取消", null)
+            .show();
+    }
+    
+    private void doLoadSGF(Uri uri) {
         try (InputStream is = getContentResolver().openInputStream(uri)) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(is));
             StringBuilder sb = new StringBuilder();
@@ -186,6 +198,18 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void saveSGF(Uri uri) {
+        // 添加保存确认对话框
+        new AlertDialog.Builder(this)
+            .setTitle("确认保存")
+            .setMessage("确定要保存棋局吗？如果文件已存在，将被覆盖。")
+            .setPositiveButton("确定", (dialog, which) -> {
+                doSaveSGF(uri);
+            })
+            .setNegativeButton("取消", null)
+            .show();
+    }
+    
+    private void doSaveSGF(Uri uri) {
         try (OutputStream os = getContentResolver().openOutputStream(uri, "w")) { // 添加"w"参数确保覆盖现有文件
             GoBoard board = boardView.getBoard();
             String sgf = SGFParser.saveToString(board, board.getBlackPlayer(), board.getWhitePlayer(), board.getResult());
@@ -208,8 +232,8 @@ public class MainActivity extends AppCompatActivity {
             intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
             openDocumentLauncher.launch(intent);
         } else if (requestCode == REQUEST_CODE_SAVE) {
-            // 使用ACTION_OPEN_DOCUMENT来支持覆盖现有文件
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            // 使用ACTION_CREATE_DOCUMENT来创建或覆盖文件
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             // 使用更通用的文件类型，确保能找到SGF文件
             intent.setType("*/*");
