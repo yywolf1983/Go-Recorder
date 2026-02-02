@@ -1,10 +1,8 @@
 package com.gosgf.app;  // 确保包声明正确
 
 import android.util.Log;
-import com.gosgf.app.model.InvalidSGFException;
 import android.os.Bundle;
-import android.widget.Button;
-import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.content.Intent;
 import android.net.Uri;
@@ -18,45 +16,33 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import com.gosgf.app.view.BoardView;
 import com.gosgf.app.model.GoBoard;
 import com.gosgf.app.R;
 import com.gosgf.app.util.SGFParser;
-import java.util.Scanner;
-import android.widget.TextView;
-import java.util.List;
-import java.util.stream.IntStream;
 import android.view.View;
 import android.view.MotionEvent;
 import androidx.appcompat.app.AlertDialog;
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.os.Build;
+import android.text.InputType;
+import android.widget.EditText;
+import android.widget.Button;
 
 public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CODE_LOAD = 1;
     private static final int REQUEST_CODE_SAVE = 2;
-    private static final int REQUEST_CODE_EDIT_INFO = 3;
-    private static final int REQUEST_CODE_PERMISSION = 100;
     private static final int BOARD_SIZE = 19;
     
-    // 在类顶部统一定义变量
-    private TextView tvGameInfo;
-    // 删除editMode变量声明
-    // private boolean editMode = false;
-    
-    // 删除toggleEditMode方法
-    // private void toggleEditMode() {
-    //     GoBoard board = boardView.getBoard();
-    //     if (board != null) {
-    //         editMode = !editMode;
-    //         board.setEditMode(editMode);
-    //         updateGameInfo();
-    //         String message = editMode ? "已进入摆子模式" : "已退出摆子模式";
-    //         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-    //     }
-    // }
+    // UI组件
+    private View toolbar;
+    private Button btnNew, btnLoad, btnSave;
+    private Button btnToStart, btnPrev, btnNext, btnPass;
+    private Button btnComment, btnMark;
+    private TextView tvGameInfo, tvCommentDisplay;
     private BoardView boardView;
+    
+    // 其他变量
     private float startX, startY;
     private ActivityResultLauncher<Intent> openDocumentLauncher;
     private ActivityResultLauncher<Intent> createDocumentLauncher;
@@ -66,543 +52,391 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
+        // 初始化UI组件
+        initUI();
+        
+        // 初始化文件选择器
+        initFileLaunchers();
+        
+        // 设置事件监听器
+        setupListeners();
+        
+        // 初始化游戏信息
+        updateGameInfo();
+    }
+    
+    private void initUI() {
+        // 工具栏按钮
+        toolbar = findViewById(R.id.toolbar);
+        btnNew = findViewById(R.id.btnNew);
+        btnLoad = findViewById(R.id.btnLoad);
+        btnSave = findViewById(R.id.btnSave);
+        
+        // 导航按钮
+        btnToStart = findViewById(R.id.btnToStart);
+        btnPrev = findViewById(R.id.btnPrev);
+        btnNext = findViewById(R.id.btnNext);
+        btnPass = findViewById(R.id.btnPass);
+        
+        // 功能按钮
+        btnComment = findViewById(R.id.btnComment);
+        btnMark = findViewById(R.id.btnMark);
+        // 移除分支选择按钮，所有分支操作直接在棋盘上完成
+        
+        // 信息显示
+        tvGameInfo = findViewById(R.id.tvGameInfo);
+        tvCommentDisplay = findViewById(R.id.tvCommentDisplay);
+        
+        // 棋盘视图
+        boardView = findViewById(R.id.board_view);
+    }
+    
+    private void initFileLaunchers() {
         openDocumentLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     Uri uri = result.getData().getData();
                     if (uri != null) {
-                        try (InputStream is = getContentResolver().openInputStream(uri)) {
-                            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-                            StringBuilder sb = new StringBuilder();
-                            String line;
-                            while ((line = reader.readLine()) != null) {
-                                sb.append(line);
-                            }
-                            try {
-                                SGFParser.parseSGF(sb.toString(), boardView.getBoard());
-                                // Set to start of game when loading a game (no moves should be displayed)
-                                boardView.getBoard().setCurrentMoveNumber(-1);
-                                boardView.invalidate();
-                                updateCommentDisplay();
-                                updateButtonStates();
-                                GoBoard board = boardView.getBoard();
-                                if (board != null) {
-                                    for (GoBoard.Move move : board.getMoveHistory()) {
-                                        if (move.x == -1) {
-                                            String player = move.color == 1 ? "黑方" : "白方";
-                                            Toast.makeText(this, "加载棋局包含" + player + "虚手", Toast.LENGTH_SHORT).show();
-                                            break;
-                                        }
-                                    }
-                                }
-                                Toast.makeText(this, "棋局已加载(包含注释)", Toast.LENGTH_SHORT).show();
-                            } catch (ArrayIndexOutOfBoundsException e) {
-                                Toast.makeText(this, "SGF文件包含无效坐标", Toast.LENGTH_SHORT).show();
-                                boardView.getBoard().resetGame();
-                                boardView.invalidate();
-                            } catch (InvalidSGFException e) {
-                                Toast.makeText(this, "无效的SGF格式: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                            }
-                        } catch (IOException e) {
-                            Toast.makeText(this, "加载失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        }
+                        loadSGF(uri);
                     }
                 }
             }
         );
+        
         createDocumentLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     Uri uri = result.getData().getData();
                     if (uri != null) {
-                        try (OutputStream os = getContentResolver().openOutputStream(uri)) {
-                            GoBoard board = boardView.getBoard();
-                            String sgf = SGFParser.saveToString(board, board.getBlackPlayer(), board.getWhitePlayer(), board.getResult());
-                            os.write(sgf.getBytes(StandardCharsets.UTF_8));
-                            Toast.makeText(this, "棋局已保存", Toast.LENGTH_SHORT).show();
-                        } catch (IOException e) {
-                            Toast.makeText(this, "保存失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        }
+                        saveSGF(uri);
                     }
                 }
             }
         );
+    }
+    
+    private void setupListeners() {
+        // 工具栏按钮
+        btnNew.setOnClickListener(v -> newGame());
+        btnLoad.setOnClickListener(v -> openFile(REQUEST_CODE_LOAD));
+        btnSave.setOnClickListener(v -> openFile(REQUEST_CODE_SAVE));
         
-        // 初始化视图组件
-        boardView = findViewById(R.id.board_view);
-        tvGameInfo = findViewById(R.id.tvGameInfo);
+        // 导航按钮
+        btnToStart.setOnClickListener(v -> goToStart());
+        btnPrev.setOnClickListener(v -> previousMove());
+        btnNext.setOnClickListener(v -> nextMove());
+        btnPass.setOnClickListener(v -> passMove());
         
-        // 初始化按钮
-        Button btnPrev = findViewById(R.id.btnPrev);
-        Button btnNext = findViewById(R.id.btnNext);
-        Button btnNew = findViewById(R.id.btnNew);
-        // 删除以下摆子模式相关代码
-        // Button btnEditMode = findViewById(R.id.btnEditMode);
-        // Button btnToggleColor = findViewById(R.id.btnToggleColor);
-        // btnEditMode.setOnClickListener(v -> toggleEditMode());
-        // btnToggleColor.setOnClickListener(v -> {
-        //     if (boardView.getBoard() != null) {
-        //         boardView.getBoard().toggleCurrentPlayer();
-        //         updateGameInfo();
-        //     }
-        // });
+        // 功能按钮
+        btnComment.setOnClickListener(v -> showCommentDialog());
+        btnMark.setOnClickListener(v -> showMarkDialog());
+        // 移除分支选择按钮的点击事件，所有分支操作直接在棋盘上完成
         
-        // 设置事件监听（必须放在方法体内）
-        findViewById(R.id.btnLoad).setOnClickListener(v -> openFile(REQUEST_CODE_LOAD));
-        findViewById(R.id.btnSave).setOnClickListener(v -> openFile(REQUEST_CODE_SAVE));
-        findViewById(R.id.btnComment).setOnClickListener(v -> showCommentDialog());
-        
-        btnPrev.setOnClickListener(v -> {
-            GoBoard board = boardView.getBoard();
-            if (board.getCurrentMoveNumber() == 0) {
-                // If at first move, go to start of game
-                board.setCurrentMoveNumber(-1);
-                boardView.invalidateBoard();
-                updateGameInfo();
-                updateButtonStates();
-                updateCommentDisplay();
-            } else if (board.previousMove()) {
-                boardView.invalidateBoard();
-                updateGameInfo();
-                updateButtonStates();
-                updateCommentDisplay(); // 添加这行
+        // 棋盘手势操作由BoardView自己处理
+    }
+    
+    private void newGame() {
+        boardView.getBoard().resetGame();
+        boardView.invalidateBoard();
+        updateGameInfo();
+        updateCommentDisplay();
+        Toast.makeText(this, "新游戏已创建", Toast.LENGTH_SHORT).show();
+    }
+    
+    private void loadSGF(Uri uri) {
+        try (InputStream is = getContentResolver().openInputStream(uri)) {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
             }
-        });
-        
-        // 确保btnNext按钮不为null
-        if (btnNext != null) {
-            btnNext.setOnClickListener(v -> {
+            
+            try {
+                SGFParser.parseSGF(sb.toString(), boardView.getBoard());
+                boardView.invalidateBoard();
+                updateGameInfo();
+                updateCommentDisplay();
+                
+                // 检查是否包含虚手
                 GoBoard board = boardView.getBoard();
-                if (board == null) {
-                    return;
-                }
-                int currentMove = board.getCurrentMoveNumber();
-                List<GoBoard.Move> moveHistory = board.getMoveHistory();
-                
-                // Check if current position has variations
-                boolean branchSelected = false;
-                
-                // Case 1: At start with variations
-                if (currentMove < 0) {
-                    if (board.hasStartVariations()) {
-                        // At start with variations, select first branch
-                        branchSelected = board.selectVariation(0);
-                    } else if (!moveHistory.isEmpty()) {
-                        // At start without variations but with moves, advance to first move
-                        branchSelected = board.nextMove();
-                    }
-                }
-                // Case 2: At regular move with variations
-                else if (currentMove >= 0 && currentMove < moveHistory.size()) {
-                    GoBoard.Move currentBoardMove = moveHistory.get(currentMove);
-                    if (currentBoardMove != null) {
-                        if (!currentBoardMove.variations.isEmpty()) {
-                            // Has variations, auto-select the first one (tree's foremost branch)
-                            branchSelected = board.selectVariation(0);
-                        } else {
-                            // No variations, advance normally
-                            branchSelected = board.nextMove();
+                if (board != null) {
+                    for (GoBoard.Move move : board.getMoveHistory()) {
+                        if (move.x == -1) {
+                            String player = move.color == 1 ? "黑方" : "白方";
+                            Toast.makeText(this, "加载棋局包含" + player + "虚手", Toast.LENGTH_SHORT).show();
+                            break;
                         }
                     }
                 }
                 
-                // If we advanced or selected a branch, update UI
-                if (branchSelected) {
-                    boardView.invalidateBoard();
-                    updateGameInfo();
-                    updateButtonStates();
-                    updateCommentDisplay();
-                }
-            });
+                Toast.makeText(this, "棋局已加载", Toast.LENGTH_SHORT).show();
+            } catch (ArrayIndexOutOfBoundsException e) {
+                Toast.makeText(this, "SGF文件包含无效坐标", Toast.LENGTH_SHORT).show();
+                boardView.getBoard().resetGame();
+                boardView.invalidateBoard();
+            } catch (SGFParser.SGFParseException e) {
+                Toast.makeText(this, "无效的SGF格式: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        } catch (IOException e) {
+            Toast.makeText(this, "加载失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
-        
-        findViewById(R.id.btnNew).setOnClickListener(v -> {
-            boardView.getBoard().resetGame();
-            // Set to first move when creating a new game (default should have one move)
-            boardView.getBoard().setCurrentMoveNumber(0);
-            boardView.invalidateBoard();
-            updateButtonStates();
-        });
-        
-        // 添加运行时权限检查
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) 
-                != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{
-                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-                }, REQUEST_CODE_PERMISSION);
-            }
-        }
-        
-        updateButtonStates();
-        setupBoardGestures();
-        
-        // 添加虚手按钮初始化
-        // 虚手按钮点击事件
-        Button btnPass = findViewById(R.id.btnPass);
-        btnPass.setOnClickListener(v -> {
-            GoBoard board = boardView.getBoard();
-            if (board != null) {
-                board.skipTurn();
-                boardView.invalidate();
-                updateGameInfo();
-                updateCommentDisplay();
-                String player = board.getCurrentPlayer() == 1 ? "黑方" : "白方";
-                Toast.makeText(this, player + "虚手成功", Toast.LENGTH_SHORT).show();
-                updateButtonStates();
-            }
-        });
-        
-        // 到棋局开始按钮
-        Button btnToStart = findViewById(R.id.btnToStart);
-        btnToStart.setOnClickListener(v -> {
-            GoBoard board = boardView.getBoard();
-            if (board != null) {
-                board.setCurrentMoveNumber(-1);
-                boardView.invalidate();
-                updateGameInfo();
-                updateButtonStates();
-                updateCommentDisplay();
-                Toast.makeText(this, "已回到棋局开始", Toast.LENGTH_SHORT).show();
-            }
-        });
-        
-        // 到棋局结尾按钮
-        Button btnToEnd = findViewById(R.id.btnToEnd);
-        btnToEnd.setOnClickListener(v -> {
-            GoBoard board = boardView.getBoard();
-            if (board != null) {
-                int totalMoves = board.getMoveHistory().size();
-                board.setCurrentMoveNumber(totalMoves - 1);
-                boardView.invalidate();
-                updateButtonStates();
-                updateCommentDisplay();
-                Toast.makeText(this, "已到棋局结尾", Toast.LENGTH_SHORT).show();
-            }
-        });
     }
     
-    // 设置棋盘手势
-    private void setupBoardGestures() {
-        // 实现棋盘手势逻辑
-    }
-    
-    // 更新按钮状态
-    private void updateButtonStates() {
-        Button btnPrev = findViewById(R.id.btnPrev);
-        Button btnNext = findViewById(R.id.btnNext);
-        Button btnToStart = findViewById(R.id.btnToStart);
-        Button btnToEnd = findViewById(R.id.btnToEnd);
-        GoBoard board = boardView.getBoard();
-        if (board == null) {
-            if (btnPrev != null) btnPrev.setEnabled(false);
-            if (btnNext != null) btnNext.setEnabled(false);
-            if (btnToStart != null) btnToStart.setEnabled(false);
-            if (btnToEnd != null) btnToEnd.setEnabled(false);
-            return;
+    private void saveSGF(Uri uri) {
+        try (OutputStream os = getContentResolver().openOutputStream(uri, "w")) { // 添加"w"参数确保覆盖现有文件
+            GoBoard board = boardView.getBoard();
+            String sgf = SGFParser.saveToString(board, board.getBlackPlayer(), board.getWhitePlayer(), board.getResult());
+            os.write(sgf.getBytes(StandardCharsets.UTF_8));
+            Toast.makeText(this, "棋局已保存", Toast.LENGTH_SHORT).show();
+        } catch (IOException e) {
+            Toast.makeText(this, "保存失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
-
-        int cur = board.getCurrentMoveNumber();
-        int total = board.getMoveHistory().size();
-        if (btnPrev != null) btnPrev.setEnabled(cur >= 0);
-        // Always enable btnNext if there are moves to go to or variations to select
-        boolean canAdvance = (cur < total - 1) || board.hasStartVariations();
-        if (btnNext != null) btnNext.setEnabled(canAdvance);
-        if (btnToStart != null) btnToStart.setEnabled(total > 0);
-        if (btnToEnd != null) btnToEnd.setEnabled(total > 0 && cur < total - 1);
     }
     
-    // 打开文件
     private void openFile(int requestCode) {
-        Intent intent = new Intent(requestCode == REQUEST_CODE_LOAD ? 
-            Intent.ACTION_OPEN_DOCUMENT : Intent.ACTION_CREATE_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
-                       Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
-                       Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        
-        if (requestCode == REQUEST_CODE_SAVE) {
-            intent.putExtra(Intent.EXTRA_TITLE, "game.sgf");
-            intent.putExtra(Intent.EXTRA_ALLOW_REPLACE, true);
-            createDocumentLauncher.launch(intent);
-        } else {
+        if (requestCode == REQUEST_CODE_LOAD) {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            // 使用更通用的文件类型，确保能找到SGF文件
+            intent.setType("*/*");
+            // 添加SGF文件扩展名过滤器
+            String[] mimeTypes = {"application/sgf", "text/plain", "*/*"};
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+            intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
             openDocumentLauncher.launch(intent);
+        } else if (requestCode == REQUEST_CODE_SAVE) {
+            // 使用ACTION_OPEN_DOCUMENT来支持覆盖现有文件
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            // 使用更通用的文件类型，确保能找到SGF文件
+            intent.setType("*/*");
+            // 添加SGF文件扩展名过滤器
+            String[] mimeTypes = {"application/sgf", "text/plain", "*/*"};
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+            intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+            createDocumentLauncher.launch(intent);
         }
     }
     
-    // 显示注释对话框
-    private void showCommentDialog() {
+    private void goToStart() {
         GoBoard board = boardView.getBoard();
-        if (board == null) return;
-        
-        // 获取当前手数和注释
-        GoBoard.Move currentMove = board.getCurrentMove();
-        if (currentMove == null) {
-            Toast.makeText(this, "请先落子", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        // 创建对话框
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_comment, null);
-        builder.setView(dialogView);
-        
-        // 设置对话框标题和内容
-        TextView tvMoveInfo = dialogView.findViewById(R.id.tvMoveInfo);
-        EditText etComment = dialogView.findViewById(R.id.etComment);
-        
-        int moveNumber = board.getCurrentMoveNumber() + 1; // 这里已经是从1开始
-        String playerColor = currentMove.color == 1 ? "黑" : "白";
-        tvMoveInfo.setText(String.format("第 %d 手 (%s)", moveNumber, playerColor));
-        etComment.setText(currentMove.comment != null ? currentMove.comment : "");
-        
-        // 创建对话框
-        AlertDialog dialog = builder.create();
-        
-        dialogView.findViewById(R.id.btnSaveComment).setOnClickListener(v -> {
-            String comment = etComment.getText().toString().trim();
-            currentMove.comment = comment;
-            Toast.makeText(MainActivity.this, "注释已保存", Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-            updateCommentDisplay();
-        });
-        
-        dialogView.findViewById(R.id.btnCancelComment).setOnClickListener(v -> dialog.dismiss());
-        
-        dialog.show();
-    }
-    
-    // 更新注释显示
-    private void updateCommentDisplay() {
-        GoBoard board = boardView.getBoard();
-        if (board == null) return;
-        
-        // 只显示当前手的注释
-        GoBoard.Move currentMove = board.getCurrentMove();
-        TextView tvCommentDisplay = findViewById(R.id.tvCommentDisplay);
-        if (currentMove != null && currentMove.comment != null && !currentMove.comment.isEmpty()) {
-            tvCommentDisplay.setText(currentMove.comment);
-        } else {
-            tvCommentDisplay.setText("暂无注释");
-        }
-    }
-    
-    // 在所有需要更新注释的地方调用updateCommentDisplay()
-    public void onBoardClick(int x, int y) {
-        GoBoard board = boardView.getBoard();
-        if (board != null && !board.isEditMode()) {
-            boolean willCreateVariation = board.getCurrentMoveNumber() < board.getMoveHistory().size() - 1;
-            if (board.placeStone(x, y)) {
-                boardView.invalidate();
-                updateGameInfo();
-                updateCommentDisplay(); // 添加这行
-                updateButtonStates();
-                if (willCreateVariation) {
-                    Toast.makeText(this, "已创建分支", Toast.LENGTH_SHORT).show();
-                }
-                updateButtonStates();
-            }
-        }
-    }
-    
-    public void previousMove() {
-        if (boardView.getBoard().previousMove()) {
-            boardView.invalidate();
-            updateGameInfo();
-            updateCommentDisplay(); // 添加这行
-            updateButtonStates();
-        }
-    }
-    
-    public void nextMove() {
-        if (boardView.getBoard().nextMove()) {
-            boardView.invalidate();
-            updateGameInfo();
-            updateCommentDisplay(); // 添加这行
-            updateButtonStates();
-        }
-    }
-    
-    // 更新游戏信息显示
-    private void updateGameInfo() {
-        GoBoard board = boardView.getBoard();
-        if (board == null || tvGameInfo == null) return;
-        
-        String playerStatus = board.getCurrentPlayer() == 1 ? 
-            "黑方回合" : "白方回合";
-        
-        int currentMoveNumber = board.getCurrentMoveNumber();
-        int totalMoves = board.getMoveHistory().size();
-        
-        String moveInfo;
-        if (currentMoveNumber == -1) {
-            moveInfo = "棋局开始";
-        } else {
-            int currentMove = currentMoveNumber + 1; // 从1开始
-            moveInfo = "第 " + currentMove + " 手 / 共 " + totalMoves + " 手";
-        }
-        
-        // 删除摆子模式判断
-        tvGameInfo.setText(playerStatus + " | " + moveInfo);
-    }
-    
-
-    
-    // 重置游戏
-    private void resetGame() {
-        boardView.getBoard().resetGame();
+        board.setCurrentMoveNumber(-1);
         boardView.invalidateBoard();
-        updateButtonStates();
-        ((TextView)findViewById(R.id.tvCommentDisplay)).setText("新棋局已创建");
-    }
-    
-    // 获取最新注释
-    private String getLatestComment() {
-        GoBoard board = boardView.getBoard();
-        List<GoBoard.Move> moves = board.getMoveHistory();
-        int currentMove = board.getCurrentMoveNumber();
-        
-        if (currentMove >= 0 && moves != null && currentMove < moves.size()) {
-            GoBoard.Move move = moves.get(currentMove);
-            if (move.comment != null && !move.comment.isEmpty()) {
-                return move.comment;
-            }
-        }
-        return "暂无注释";
-    }
-    
-    // 分支选择
-    public void onBranchSelect(View view) {
-        GoBoard board = boardView.getBoard();
-        if (board == null) {
-            Toast.makeText(this, "当前无可选分支", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        // 处理第一手分支的情况
-        if (board.getCurrentMoveNumber() < 0) {
-            if (!board.hasStartVariations()) {
-                Toast.makeText(this, "当前无可选分支", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            List<List<GoBoard.Move>> startVariations = board.getMoveHistory().get(0).variations;
-            
-            new AlertDialog.Builder(this)
-                .setTitle("选择分支路径")
-                .setItems(getBranchTitles(startVariations), (dialog, which) -> {
-                    board.selectVariation(which);
-                    boardView.invalidate();
-                    updateButtonStates();
-                    updateGameInfo();
-                    updateCommentDisplay();
-                })
-                .show();
-            return;
-        }
-        
-        // 处理其他手的分支情况
-        if (board.getCurrentMove() == null) {
-            Toast.makeText(this, "当前无可选分支", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        List<List<GoBoard.Move>> currentVariations = board.getCurrentMove().variations;
-        if (currentVariations == null || currentVariations.isEmpty()) {
-            Toast.makeText(this, "当前手没有分支", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        new AlertDialog.Builder(this)
-            .setTitle("选择分支路径")
-            .setItems(getBranchTitles(currentVariations), (dialog, which) -> {
-                board.selectVariation(which);
-                boardView.invalidate();
-                updateButtonStates();
-                updateGameInfo();
-                updateCommentDisplay();
-            })
-            .show();
-    }
-    
-    // 直接根据分支索引进行切换（用于棋盘点击分支提示）
-    public void onBranchSelectIndex(int index) {
-        GoBoard board = boardView.getBoard();
-        if (board == null) {
-            Toast.makeText(this, "当前无可选分支", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        // 处理第一手分支的情况
-        if (board.getCurrentMoveNumber() < 0) {
-            if (!board.hasStartVariations()) {
-                Toast.makeText(this, "当前无可选分支", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            List<List<GoBoard.Move>> vars = board.getMoveHistory().get(0).variations;
-            if (vars == null || index < 0 || index >= vars.size()) {
-                Toast.makeText(this, "分支不存在", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            boolean ok = board.selectVariation(index);
-            if (!ok) {
-                Toast.makeText(this, "分支第一步解析失败", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            boardView.invalidate();
-            updateButtonStates();
-            updateGameInfo();
-            updateCommentDisplay();
-            return;
-        }
-        
-        // 处理其他手的分支情况
-        if (board.getCurrentMove() == null) {
-            Toast.makeText(this, "当前无可选分支", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        List<List<GoBoard.Move>> vars = board.getCurrentMove().variations;
-        if (vars == null || index < 0 || index >= vars.size()) {
-            Toast.makeText(this, "分支不存在", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        boolean ok = board.selectVariation(index);
-        if (!ok) {
-            Toast.makeText(this, "分支第一步解析失败", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        boardView.invalidate();
-        updateButtonStates();
         updateGameInfo();
         updateCommentDisplay();
     }
     
-    // 获取分支标题
-    private String[] getBranchTitles(List<List<GoBoard.Move>> variations) {
-        String[] titles = new String[variations.size()];
-        for (int i = 0; i < variations.size(); i++) {
-            List<GoBoard.Move> v = variations.get(i);
-            String label = "分支 " + (i + 1);
-            if (v != null && !v.isEmpty()) {
-                GoBoard.Move m = v.get(0);
-                if (m.x >= 0 && m.y >= 0) {
-                    String color = m.color == 1 ? "黑" : "白";
-                    label += ": " + color + " " + toCoord(m.x, m.y);
-                }
-            }
-            titles[i] = label;
+    private void previousMove() {
+        GoBoard board = boardView.getBoard();
+        if (board.getCurrentMoveNumber() == 0) {
+            // 如果在第一手，回到起始状态
+            board.setCurrentMoveNumber(-1);
+        } else {
+            board.previousMove();
         }
-        return titles;
+        boardView.invalidateBoard();
+        updateGameInfo();
+        updateCommentDisplay();
     }
     
-    private String toCoord(int x, int y) {
-        String[] letters = {"A","B","C","D","E","F","G","H","J","K","L","M","N","O","P","Q","R","S","T"};
-        String col = (x >= 0 && x < letters.length) ? letters[x] : String.valueOf((char)('A' + x));
-        int row = 19 - y;
-        return col + row;
+    private void nextMove() {
+        GoBoard board = boardView.getBoard();
+        if (board.getCurrentMoveNumber() < 0) {
+            // 如果在起始状态，直接进入第一步
+            if (board.getMoveHistory().size() > 0) {
+                // 如果已经有moveHistory，直接前进到第一步
+                // 这样可以保持当前的分支，而不是默认选择第一个分支
+                board.setCurrentMoveNumber(0);
+                boardView.invalidateBoard();
+                updateGameInfo();
+                updateCommentDisplay();
+            } else if (board.hasStartVariations()) {
+                // 如果没有moveHistory，但是有startVariations，选择第一个分支
+                board.selectVariation(0);
+                // 选择分支后，手动前进到第一步
+                board.setCurrentMoveNumber(0);
+                boardView.invalidateBoard();
+                updateGameInfo();
+                updateCommentDisplay();
+            }
+        } else {
+            // 直接执行下一步移动
+            board.nextMove();
+            boardView.invalidateBoard();
+            updateGameInfo();
+            updateCommentDisplay();
+        }
     }
     
-    // 移除已弃用的 onActivityResult，改用 Activity Result API
-} // 类结束的大括号
+    private void passMove() {
+        GoBoard board = boardView.getBoard();
+        if (board.placeStone(-1, -1)) {
+            boardView.invalidateBoard();
+            updateGameInfo();
+            updateCommentDisplay();
+            Toast.makeText(this, "虚手", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    private void showCommentDialog() {
+        GoBoard board = boardView.getBoard();
+        if (board.getCurrentMoveNumber() < 0) {
+            Toast.makeText(this, "请先落子或选择分支", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        EditText editText = new EditText(this);
+        editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        editText.setLines(3);
+        editText.setText(board.getComment());
+        
+        new AlertDialog.Builder(this)
+            .setTitle("添加注释")
+            .setView(editText)
+            .setPositiveButton("确定", (dialog, which) -> {
+                board.setComment(editText.getText().toString());
+                updateCommentDisplay();
+            })
+            .setNegativeButton("取消", null)
+            .show();
+    }
+    
+    private void showMarkDialog() {
+        GoBoard board = boardView.getBoard();
+        if (board.getCurrentMoveNumber() < 0) {
+            Toast.makeText(this, "请先落子或选择分支", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String[] markOptions = {"无标记", "三角形", "方形", "圆形", "X标记"};
+        
+        new AlertDialog.Builder(this)
+            .setTitle("添加标记")
+            .setItems(markOptions, (dialog, which) -> {
+                board.setMark(which);
+                boardView.invalidateBoard();
+            })
+            .show();
+    }
+    
+    // 所有分支选择相关的弹出窗口已移除，分支操作直接在棋盘上完成
+    
+
+    
+    // 添加一个方法让BoardView调用，用于处理落子
+    public void handleBoardClick(int x, int y) {
+        GoBoard board = boardView.getBoard();
+        if (board != null) {
+            if (board.placeStone(x, y)) {
+                boardView.invalidateBoard();
+                updateGameInfo();
+                updateCommentDisplay();
+            }
+        }
+    }
+    
+    public void updateGameInfo() {
+        GoBoard board = boardView.getBoard();
+        int moveNumber = board.getCurrentMoveNumber();
+        int totalMoves = board.getMoveHistory().size();
+        
+        StringBuilder info = new StringBuilder();
+        if (moveNumber < 0) {
+            info.append("起始状态");
+        } else {
+            info.append("第").append(moveNumber + 1).append("手 / 共").append(totalMoves).append("手");
+        }
+        
+        info.append(" - ");
+        info.append(board.getCurrentPlayer() == 1 ? "黑方" : "白方").append("回合");
+        
+        // 添加分支信息
+        List<String> variationNames = board.getVariationNames();
+        if (!variationNames.isEmpty()) {
+            info.append("\n分支: ").append(variationNames.size()).append("个");
+        }
+        
+        // 添加玩家信息
+        String blackPlayer = board.getBlackPlayer();
+        String whitePlayer = board.getWhitePlayer();
+        if ((blackPlayer != null && !blackPlayer.isEmpty()) || (whitePlayer != null && !whitePlayer.isEmpty())) {
+            info.append("\n").append(blackPlayer != null ? blackPlayer : "").append(" vs " ).append(whitePlayer != null ? whitePlayer : "");
+        }
+        
+        // 添加结果信息
+        String result = board.getResult();
+        if (result != null && !result.isEmpty()) {
+            info.append("\n结果: " ).append(result);
+        }
+        
+        tvGameInfo.setText(info.toString());
+        // 添加点击事件，显示更多游戏信息
+        tvGameInfo.setOnClickListener(v -> showGameInfoDialog());
+    }
+    
+    private void showGameInfoDialog() {
+        GoBoard board = boardView.getBoard();
+        StringBuilder info = new StringBuilder();
+        
+        // 基本信息
+        info.append("游戏信息:\n\n");
+        
+        // 玩家信息
+        String blackPlayer = board.getBlackPlayer();
+        String whitePlayer = board.getWhitePlayer();
+        if ((blackPlayer != null && !blackPlayer.isEmpty()) || (whitePlayer != null && !whitePlayer.isEmpty())) {
+            info.append("对局: " ).append(blackPlayer != null ? blackPlayer : "").append(" vs " ).append(whitePlayer != null ? whitePlayer : "\n");
+        }
+        
+        // 结果信息
+        String result = board.getResult();
+        if (result != null && !result.isEmpty()) {
+            info.append("结果: " ).append(result).append("\n");
+        }
+        
+        // 棋盘信息
+        info.append("棋盘大小: 19x19\n");
+        
+        // 步数信息
+        int totalMoves = board.getMoveHistory().size();
+        info.append("总步数: " ).append(totalMoves).append("\n");
+        
+        // 分支信息
+        List<String> variationNames = board.getVariationNames();
+        if (!variationNames.isEmpty()) {
+            info.append("\n当前分支: " ).append(variationNames.size()).append("个\n");
+            for (int i = 0; i < variationNames.size(); i++) {
+                info.append("  " ).append(i + 1).append(". " ).append(variationNames.get(i)).append("\n");
+            }
+        }
+        
+        // 分支结构信息
+        String structure = board.getVariationStructure();
+        if (structure != null && !structure.isEmpty()) {
+            info.append("\n分支结构:\n" ).append(structure);
+        }
+        
+        new AlertDialog.Builder(this)
+            .setTitle("详细游戏信息")
+            .setMessage(info.toString())
+            .setPositiveButton("确定", null)
+            .show();
+    }
+    
+    public void updateCommentDisplay() {
+        GoBoard board = boardView.getBoard();
+        String comment = board.getComment();
+        if (comment == null || comment.isEmpty()) {
+            tvCommentDisplay.setText("暂无注释");
+            tvCommentDisplay.setTextColor(getResources().getColor(android.R.color.darker_gray));
+        } else {
+            tvCommentDisplay.setText(comment);
+            tvCommentDisplay.setTextColor(getResources().getColor(android.R.color.black));
+            // 增加注释的显示效果
+            tvCommentDisplay.setLineSpacing(4f, 1.2f);
+        }
+    }
+}

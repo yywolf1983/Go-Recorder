@@ -11,6 +11,7 @@ import android.util.Log;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.view.GestureDetector;
 import android.view.View;
 import com.gosgf.app.model.GoBoard;
 import java.util.List;
@@ -26,6 +27,10 @@ public class BoardView extends View {
     private static final int BOARD_SIZE = 19;
     private static final float MARGIN_PERCENT = 0.08f; // 减小边距占比到8%
     private static final float STONE_RADIUS_RATIO = 0.42f; // 减小棋子半径比例
+    private float scale = 1.0f; // 缩放比例
+    private float translationX = 0.0f; // 平移X
+    private float translationY = 0.0f; // 平移Y
+    private boolean isBoardUILocked = false; // 棋盘UI锁定标志，true表示棋盘UI已固定，不允许移动和缩放
     
     private Paint boardPaint;
     private Paint stonePaint;
@@ -44,6 +49,13 @@ public class BoardView extends View {
     private float stoneRadius;
     private float startX;
     private float startY;
+    
+    // 手势检测器
+    private ScaleGestureDetector scaleDetector;
+    private GestureDetector gestureDetector;
+    private float lastTouchX;
+    private float lastTouchY;
+    private boolean isDragging = false;
     
     public BoardView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -97,6 +109,39 @@ public class BoardView extends View {
         coordPaint.setTextSize(10f);
         
         board = new GoBoard();
+        
+        // 初始化缩放手势检测器
+        scaleDetector = new ScaleGestureDetector(getContext(), new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScale(ScaleGestureDetector detector) {
+                // 检查棋盘UI是否被锁定
+                if (isBoardUILocked) {
+                    return false;
+                }
+                
+                scale *= detector.getScaleFactor();
+                // 限制缩放范围
+                scale = Math.max(0.5f, Math.min(2.0f, scale));
+                invalidate();
+                return true;
+            }
+        });
+        
+        // 初始化手势检测器
+        gestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                // 检查棋盘UI是否被锁定
+                if (isBoardUILocked) {
+                    return false;
+                }
+                
+                translationX -= distanceX;
+                translationY -= distanceY;
+                invalidate();
+                return true;
+            }
+        });
     }
     
     @Override
@@ -116,6 +161,13 @@ public class BoardView extends View {
         // 棋盘居中显示
         startX = (width - boardSize) / 2;
         startY = (height - boardSize) / 2;
+        
+        // 应用缩放和平移变换
+        canvas.save();
+        canvas.translate(width / 2, height / 2);
+        canvas.scale(scale, scale);
+        canvas.translate(-width / 2, -height / 2);
+        canvas.translate(translationX, translationY);
         
         // 绘制棋盘背景
         // 优化棋盘背景色
@@ -183,6 +235,15 @@ public class BoardView extends View {
                             cy >= startY - stoneRadius && 
                             cy <= startY + boardSize + stoneRadius) {
                             
+                            // 查找当前位置的移动
+                            GoBoard.Move move = null;
+                            for (GoBoard.Move m : board.getMoveHistory()) {
+                                if (m.x == x && m.y == y) {
+                                    move = m;
+                                    break;
+                                }
+                            }
+                            
                             // 绘制棋子阴影
                             canvas.drawCircle(cx + 2, cy + 2, stoneRadius, stoneShadowPaint);
                             
@@ -221,7 +282,7 @@ public class BoardView extends View {
                             }
                             
                             // 绘制标记
-                            drawMark(canvas, cx, cy, stoneRadius);
+                            drawMark(canvas, cx, cy, stoneRadius, move);
                         }
                     }
                 }
@@ -257,49 +318,89 @@ public class BoardView extends View {
             GoBoard.Move cm = board.getCurrentMove();
             if (cm != null && cm.variations != null && !cm.variations.isEmpty()) {
                 for (int i = 0; i < cm.variations.size(); i++) {
-                    List<GoBoard.Move> var = cm.variations.get(i);
+                    GoBoard.Variation variation = cm.variations.get(i);
+                    List<GoBoard.Move> var = variation.getMoves();
                     if (var != null && !var.isEmpty()) {
                         GoBoard.Move vm = var.get(0);
                         if (vm.x >= 0 && vm.y >= 0) {
                             float cx = startX + vm.x * gridSize;
                             float cy = startY + vm.y * gridSize;
-                            float r = stoneRadius * 0.5f;
+                            float r = stoneRadius * 0.6f;
+                            
+                            // 绘制分支标记背景
+                            Paint branchBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                            branchBgPaint.setColor(Color.argb(100, 30, 144, 255));
+                            branchBgPaint.setStyle(Paint.Style.FILL);
+                            canvas.drawCircle(cx, cy, r, branchBgPaint);
+                            
+                            // 绘制分支标记边框
                             canvas.drawCircle(cx, cy, r, branchPaint);
+                            
+                            // 绘制分支编号
+                            branchLabelPaint.setTextSize(stoneRadius * 0.8f);
                             canvas.drawText(String.valueOf(i + 1), cx, cy + (branchLabelPaint.getTextSize() * 0.35f), branchLabelPaint);
+                            
+                            // 绘制分支坐标
+                            branchLabelPaint.setTextSize(stoneRadius * 0.4f);
                             String coord = toCoord(vm.x, vm.y);
-                            canvas.drawText(coord, cx, cy - stoneRadius * 0.9f, branchLabelPaint);
+                            canvas.drawText(coord, cx, cy - stoneRadius * 0.8f, branchLabelPaint);
                         }
                     }
                 }
             } else if (cm == null) {
-                List<GoBoard.Move> history = board.getMoveHistory();
-                if (history != null && !history.isEmpty()) {
-                    GoBoard.Move first = history.get(0);
-                    if (first.variations != null && !first.variations.isEmpty()) {
-                        for (int i = 0; i < first.variations.size(); i++) {
-                            List<GoBoard.Move> var = first.variations.get(i);
-                            if (var != null && !var.isEmpty()) {
-                                GoBoard.Move vm = var.get(0);
-                                if (vm.x >= 0 && vm.y >= 0) {
-                                    float cx = startX + vm.x * gridSize;
-                                    float cy = startY + vm.y * gridSize;
-                                    float r = stoneRadius * 0.5f;
-                                    canvas.drawCircle(cx, cy, r, branchPaint);
-                                    canvas.drawText(String.valueOf(i + 1), cx, cy + (branchLabelPaint.getTextSize() * 0.35f), branchLabelPaint);
-                                    String coord = toCoord(vm.x, vm.y);
-                                    canvas.drawText(coord, cx, cy - stoneRadius * 0.9f, branchLabelPaint);
-                                }
+                // 起始态，显示第一手分支
+                if (board.hasStartVariations()) {
+                    List<List<GoBoard.Move>> startVariations = board.getStartVariations();
+                    for (int i = 0; i < startVariations.size(); i++) {
+                        List<GoBoard.Move> var = startVariations.get(i);
+                        if (var != null && !var.isEmpty()) {
+                            GoBoard.Move vm = var.get(0);
+                            if (vm.x >= 0 && vm.y >= 0) {
+                                float cx = startX + vm.x * gridSize;
+                                float cy = startY + vm.y * gridSize;
+                                float r = stoneRadius * 0.6f;
+                                
+                                // 绘制分支标记背景
+                                Paint branchBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                                branchBgPaint.setColor(Color.argb(100, 30, 144, 255));
+                                branchBgPaint.setStyle(Paint.Style.FILL);
+                                canvas.drawCircle(cx, cy, r, branchBgPaint);
+                                
+                                // 绘制分支标记边框
+                                canvas.drawCircle(cx, cy, r, branchPaint);
+                                
+                                // 绘制分支编号
+                                branchLabelPaint.setTextSize(stoneRadius * 0.8f);
+                                canvas.drawText(String.valueOf(i + 1), cx, cy + (branchLabelPaint.getTextSize() * 0.35f), branchLabelPaint);
+                                
+                                // 绘制分支坐标
+                                branchLabelPaint.setTextSize(stoneRadius * 0.4f);
+                                String coord = toCoord(vm.x, vm.y);
+                                canvas.drawText(coord, cx, cy - stoneRadius * 0.8f, branchLabelPaint);
                             }
                         }
                     }
                 }
             }
         }
+        
+        // 恢复画布状态
+        canvas.restore();
     }
     
     public void setBoard(GoBoard board) {
         this.board = board;
         invalidate();
+    }
+    
+    // 设置棋盘UI锁定状态
+    public void setBoardUILocked(boolean locked) {
+        this.isBoardUILocked = locked;
+    }
+    
+    // 获取棋盘UI锁定状态
+    public boolean isBoardUILocked() {
+        return isBoardUILocked;
     }
     
     public GoBoard getBoard() {
@@ -311,42 +412,74 @@ public class BoardView extends View {
         requestLayout();  // 添加这行确保完全刷新
     }
     
+    // 获取单元格大小，用于计算落子位置
+    public float getCellSize() {
+        // 确保gridSize有效
+        if (gridSize <= 0) {
+            // 计算临时gridSize
+            int width = getWidth();
+            int height = getHeight();
+            float minDim = Math.min(width, height);
+            float margin = Math.min(width, height) * 0.02f;
+            float boardSize = Math.min(width, height) - (2 * margin);
+            return boardSize / (BOARD_SIZE - 1);
+        }
+        return gridSize;
+    }
+    
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            float x = event.getX();
-            float y = event.getY();
-            
-            // 优先检测分支提示点击
-            if (board != null) {
-                GoBoard.Move cm = board.getCurrentMove();
-                if (cm != null && cm.variations != null && !cm.variations.isEmpty()) {
-                    for (int i = 0; i < cm.variations.size(); i++) {
-                        List<GoBoard.Move> var = cm.variations.get(i);
-                        if (var != null && !var.isEmpty()) {
-                            GoBoard.Move vm = var.get(0);
-                            if (vm.x >= 0 && vm.y >= 0) {
-                                float cx = startX + vm.x * gridSize;
-                                float cy = startY + vm.y * gridSize;
-                                float r = Math.max(stoneRadius * 0.85f, gridSize * 0.4f);
-                                float dx = x - cx;
-                                float dy = y - cy;
-                                if (dx * dx + dy * dy <= r * r) {
-                                    if (getContext() instanceof MainActivity) {
-                                        ((MainActivity) getContext()).onBranchSelectIndex(i);
-                                    }
-                                    return true;
-                                }
-                            }
-                        }
+        // 确保尺寸计算正确
+        calculateBoardDimensions();
+        
+        // 处理缩放手势
+        if (!isBoardUILocked) {
+            scaleDetector.onTouchEvent(event);
+        }
+        
+        // 处理平移和点击手势
+        if (!isBoardUILocked) {
+            gestureDetector.onTouchEvent(event);
+        }
+        
+        // 处理触摸事件
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastTouchX = event.getX();
+                lastTouchY = event.getY();
+                isDragging = false;
+                break;
+            case MotionEvent.ACTION_MOVE:
+                // 检查是否正在缩放
+                if (!scaleDetector.isInProgress() && !isBoardUILocked) {
+                    float dx = event.getX() - lastTouchX;
+                    float dy = event.getY() - lastTouchY;
+                    
+                    // 检查是否是拖动
+                    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                        isDragging = true;
+                        // 平移棋盘
+                        translationX += dx;
+                        translationY += dy;
+                        invalidate();
                     }
-                } else if (cm == null) {
-                    List<GoBoard.Move> history = board.getMoveHistory();
-                    if (history != null && !history.isEmpty()) {
-                        GoBoard.Move first = history.get(0);
-                        if (first.variations != null && !first.variations.isEmpty()) {
-                            for (int i = 0; i < first.variations.size(); i++) {
-                                List<GoBoard.Move> var = first.variations.get(i);
+                }
+                lastTouchX = event.getX();
+                lastTouchY = event.getY();
+                break;
+            case MotionEvent.ACTION_UP:
+                // 如果不是拖动，则认为是点击
+                if (!isDragging) {
+                    float x = event.getX();
+                    float y = event.getY();
+                    
+                    // 优先检测分支提示点击
+                    if (board != null) {
+                        GoBoard.Move cm = board.getCurrentMove();
+                        if (cm != null && cm.variations != null && !cm.variations.isEmpty()) {
+                            for (int i = 0; i < cm.variations.size(); i++) {
+                                GoBoard.Variation variation = cm.variations.get(i);
+                                List<GoBoard.Move> var = variation.getMoves();
                                 if (var != null && !var.isEmpty()) {
                                     GoBoard.Move vm = var.get(0);
                                     if (vm.x >= 0 && vm.y >= 0) {
@@ -356,40 +489,96 @@ public class BoardView extends View {
                                         float dx = x - cx;
                                         float dy = y - cy;
                                         if (dx * dx + dy * dy <= r * r) {
-                                            if (getContext() instanceof MainActivity) {
-                                                ((MainActivity) getContext()).onBranchSelectIndex(i);
+                                            // 直接处理分支选择
+                                            if (board != null) {
+                                                board.selectVariation(i);
+                                                invalidateBoard();
+                                                // 通知MainActivity更新游戏信息和注释
+                                                if (getContext() instanceof MainActivity) {
+                                                    MainActivity activity = (MainActivity) getContext();
+                                                    activity.updateGameInfo();
+                                                    activity.updateCommentDisplay();
+                                                }
                                             }
                                             return true;
                                         }
                                     }
                                 }
                             }
+                        } else if (cm == null) {
+                            // 检查起始状态的分支
+                            if (board.hasStartVariations()) {
+                                List<List<GoBoard.Move>> startVariations = board.getStartVariations();
+                                for (int i = 0; i < startVariations.size(); i++) {
+                                    List<GoBoard.Move> var = startVariations.get(i);
+                                    if (var != null && !var.isEmpty()) {
+                                        GoBoard.Move vm = var.get(0);
+                                        if (vm.x >= 0 && vm.y >= 0) {
+                                            float cx = startX + vm.x * gridSize;
+                                            float cy = startY + vm.y * gridSize;
+                                            float r = Math.max(stoneRadius * 0.85f, gridSize * 0.4f);
+                                            float dx = x - cx;
+                                            float dy = y - cy;
+                                            if (dx * dx + dy * dy <= r * r) {
+                                                // 直接处理分支选择
+                                                if (board != null) {
+                                                    board.selectVariation(i);
+                                                    invalidateBoard();
+                                                    // 通知MainActivity更新游戏信息和注释
+                                                    if (getContext() instanceof MainActivity) {
+                                                        MainActivity activity = (MainActivity) getContext();
+                                                        activity.updateGameInfo();
+                                                        activity.updateCommentDisplay();
+                                                    }
+                                                }
+                                                return true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 检查点击是否在棋盘范围内
+                    if (x >= startX && x <= startX + gridSize * (BOARD_SIZE-1) &&
+                        y >= startY && y <= startY + gridSize * (BOARD_SIZE-1)) {
+                        
+                        // 转换为棋盘坐标
+                        int boardX = Math.round((x - startX) / gridSize);
+                        int boardY = Math.round((y - startY) / gridSize);
+                        
+                        // 确保坐标在有效范围内
+                        boardX = Math.max(0, Math.min(BOARD_SIZE-1, boardX));
+                        boardY = Math.max(0, Math.min(BOARD_SIZE-1, boardY));
+                        
+                        // 调用MainActivity的方法处理落子
+                        if (getContext() instanceof MainActivity) {
+                            MainActivity activity = (MainActivity) getContext();
+                            activity.handleBoardClick(boardX, boardY);
                         }
                     }
                 }
-            }
-            
-            // 检查点击是否在棋盘范围内
-            if (x < startX || x > startX + gridSize * (BOARD_SIZE-1) ||
-                y < startY || y > startY + gridSize * (BOARD_SIZE-1)) {
-                return false;
-            }
-            
-            // 转换为棋盘坐标
-            int boardX = Math.round((x - startX) / gridSize);
-            int boardY = Math.round((y - startY) / gridSize);
-            
-            // 确保坐标在有效范围内
-            boardX = Math.max(0, Math.min(BOARD_SIZE-1, boardX));
-            boardY = Math.max(0, Math.min(BOARD_SIZE-1, boardY));
-            
-            // 通知Activity处理落子
-            if (getContext() instanceof MainActivity) {
-                ((MainActivity) getContext()).onBoardClick(boardX, boardY);
-            }
-            return true;
+                break;
         }
-        return super.onTouchEvent(event);
+        
+        return true;
+    }
+    
+    // 计算棋盘尺寸
+    private void calculateBoardDimensions() {
+        int width = getWidth();
+        int height = getHeight();
+        float minDim = Math.min(width, height);
+        float margin = minDim * 0.02f;
+        float boardSize = minDim - (2 * margin);
+        gridSize = boardSize / (BOARD_SIZE - 1);
+        stoneRadius = gridSize * 0.48f;
+        branchLabelPaint.setTextSize(stoneRadius * 0.9f);
+        
+        // 棋盘居中显示
+        startX = (width - boardSize) / 2;
+        startY = (height - boardSize) / 2;
     }
     
     private String toCoord(int x, int y) {
@@ -399,46 +588,96 @@ public class BoardView extends View {
         return col + row;
     }
     
-    private void drawMark(Canvas canvas, float cx, float cy, float radius) {
-        if (board == null) {
-            return;
-        }
-        
-        GoBoard.Move currentMove = board.getCurrentMove();
-        if (currentMove == null || currentMove.x < 0 || currentMove.y < 0) {
-            return;
-        }
-        
-        // 计算当前坐标
-        int boardX = Math.round((cx - startX) / gridSize);
-        int boardY = Math.round((cy - startY) / gridSize);
-        
-        // 只绘制当前手的标记
-        if (currentMove.x != boardX || currentMove.y != boardY) {
+    private void drawMark(Canvas canvas, float cx, float cy, float radius, GoBoard.Move move) {
+        if (board == null || move == null) {
             return;
         }
         
         // 绘制标记
-        switch (currentMove.markType) {
+        switch (move.markType) {
             case 1: // 三角形
-                drawTriangle(canvas, cx, cy, radius * 0.6f);
+                drawTriangle(canvas, cx, cy, radius * 0.5f);
                 break;
             case 2: // 方形
-                drawSquare(canvas, cx, cy, radius * 0.6f);
+                drawSquare(canvas, cx, cy, radius * 0.5f);
                 break;
             case 3: // 圆形
-                drawCircleMark(canvas, cx, cy, radius * 0.6f);
+                drawCircleMark(canvas, cx, cy, radius * 0.5f);
                 break;
             case 4: // X标记
-                drawXMark(canvas, cx, cy, radius * 0.6f);
+                drawXMark(canvas, cx, cy, radius * 0.5f);
+                break;
+            case 5: // 数字标记
+                drawNumberMark(canvas, cx, cy, radius * 0.6f, move.label);
+                break;
+            case 6: // 字母标记
+                drawLetterMark(canvas, cx, cy, radius * 0.6f, move.label);
+                break;
+            case 7: // 正方形标记
+                drawSquareMark(canvas, cx, cy, radius * 0.5f);
+                break;
+            case 8: // 三角形标记
+                drawTriangleMark(canvas, cx, cy, radius * 0.5f);
+                break;
+            case 9: // 圆形标记
+                drawCircleMark(canvas, cx, cy, radius * 0.5f);
+                break;
+            case 10: // 叉号标记
+                drawCrossMark(canvas, cx, cy, radius * 0.5f);
                 break;
         }
         
         // 绘制标签
-        if (currentMove.label != null && !currentMove.label.isEmpty()) {
-            labelPaint.setTextSize(radius * 0.8f);
-            canvas.drawText(currentMove.label, cx, cy + radius * 0.3f, labelPaint);
+        if (move.label != null && !move.label.isEmpty()) {
+            // 为标签添加背景，使其更加清晰
+            Paint labelBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            labelBgPaint.setColor(Color.argb(150, 255, 255, 255));
+            labelBgPaint.setStyle(Paint.Style.FILL);
+            
+            float labelSize = radius * 0.8f;
+            labelPaint.setTextSize(labelSize);
+            float labelWidth = labelPaint.measureText(move.label);
+            
+            // 绘制标签背景
+            canvas.drawRoundRect(
+                cx - labelWidth / 2 - 4,
+                cy - labelSize / 2 - 2,
+                cx + labelWidth / 2 + 4,
+                cy + labelSize / 2 + 2,
+                4,
+                4,
+                labelBgPaint
+            );
+            
+            // 绘制标签
+            labelPaint.setColor(Color.BLUE);
+            canvas.drawText(move.label, cx, cy + labelSize * 0.3f, labelPaint);
         }
+    }
+    
+    private void drawNumberMark(Canvas canvas, float cx, float cy, float size, String label) {
+        labelPaint.setTextSize(size * 1.2f);
+        canvas.drawText(label, cx, cy + size * 0.3f, labelPaint);
+    }
+    
+    private void drawLetterMark(Canvas canvas, float cx, float cy, float size, String label) {
+        labelPaint.setTextSize(size * 1.2f);
+        canvas.drawText(label, cx, cy + size * 0.3f, labelPaint);
+    }
+    
+    private void drawSquareMark(Canvas canvas, float cx, float cy, float size) {
+        float halfSize = size * 0.7f;
+        canvas.drawRect(cx - halfSize, cy - halfSize, cx + halfSize, cy + halfSize, markPaint);
+    }
+    
+    private void drawTriangleMark(Canvas canvas, float cx, float cy, float size) {
+        drawTriangle(canvas, cx, cy, size);
+    }
+    
+    private void drawCrossMark(Canvas canvas, float cx, float cy, float size) {
+        float halfSize = size * 0.7f;
+        canvas.drawLine(cx - halfSize, cy - halfSize, cx + halfSize, cy + halfSize, markPaint);
+        canvas.drawLine(cx + halfSize, cy - halfSize, cx - halfSize, cy + halfSize, markPaint);
     }
     
     private void drawTriangle(Canvas canvas, float cx, float cy, float size) {

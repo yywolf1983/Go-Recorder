@@ -20,9 +20,10 @@
         android:layout_height="wrap_content"
         android:minHeight="120dp"
         android:gravity="top|start"
-        android:hint="输入注释..."
-        android:inputType="textMultiLine"
-        android:background="@android:drawable/edit_text"/>
+        android:hint="输入注释...\n支持简单的富文本格式：\n- **粗体**：使用 **文本**\n- *斜体*：使用 *文本*\n- [链接](URL)：使用 [文本](URL)"
+        android:inputType="textMultiLine|textCapSentences"
+        android:background="@android:drawable/edit_text"
+        android:scrollbars="vertical"/>
 
     <LinearLayout
         android:layout_width="match_parent"

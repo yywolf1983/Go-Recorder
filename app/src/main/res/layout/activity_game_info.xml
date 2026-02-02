@@ -6,14 +6,14 @@
     android:padding="16dp">
 
     <EditText
-        android:id="@+id/etBlack"
+        android:id="@+id/etBlackPlayer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="黑方选手"
         android:inputType="textPersonName"/>
 
     <EditText
-        android:id="@+id/etWhite"
+        android:id="@+id/etWhitePlayer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="白方选手"
@@ -28,12 +28,25 @@
         android:layout_marginTop="16dp"
         android:inputType="text"/>
 
-    <Button
-        android:id="@+id/btnSaveInfo"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="end"
+        android:orientation="horizontal"
         android:layout_marginTop="24dp"
-        android:text="保存信息"/>
+        android:gravity="end">
+        
+        <Button
+            android:id="@+id/btnCancelGameInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="取消"/>
+        
+        <Button
+            android:id="@+id/btnSaveGameInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="保存"/>
+    </LinearLayout>
 
 </LinearLayout>

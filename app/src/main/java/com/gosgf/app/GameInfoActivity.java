@@ -14,12 +14,15 @@ public class GameInfoActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game_info);
         
-        etBlack = findViewById(R.id.etBlack);
-        etWhite = findViewById(R.id.etWhite);
+        etBlack = findViewById(R.id.etBlackPlayer);
+        etWhite = findViewById(R.id.etWhitePlayer);
         etResult = findViewById(R.id.etResult);
         
-        Button btnSave = findViewById(R.id.btnSaveInfo);
+        Button btnSave = findViewById(R.id.btnSaveGameInfo);
         btnSave.setOnClickListener(v -> saveAndReturn());
+        
+        Button btnCancel = findViewById(R.id.btnCancelGameInfo);
+        btnCancel.setOnClickListener(v -> finish());
     }
 
     private void saveAndReturn() {
