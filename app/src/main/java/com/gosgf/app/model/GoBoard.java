@@ -786,8 +786,29 @@ public class GoBoard {
     public boolean removeStartVariation(int index) {
         if (startVariations.isEmpty()) return false;
         if (index < 0 || index >= startVariations.size()) return false;
+        Variation variation = startVariations.get(index);
+        // 递归删除分支及其所有后续分支
+        recursivelyRemoveVariation(variation);
         startVariations.remove(index);
         return true;
+    }
+    
+    private void recursivelyRemoveVariation(Variation variation) {
+        if (variation == null) return;
+        List<Move> moves = variation.getMoves();
+        if (moves == null) return;
+        
+        for (Move move : moves) {
+            if (move.variations != null && !move.variations.isEmpty()) {
+                // 先复制列表，避免在遍历时修改
+                List<Variation> variationsCopy = new ArrayList<>(move.variations);
+                for (Variation var : variationsCopy) {
+                    recursivelyRemoveVariation(var);
+                }
+                // 清空后续分支列表
+                move.variations.clear();
+            }
+        }
     }
     
     public boolean removeCurrentVariation(int index) {
@@ -797,6 +818,9 @@ public class GoBoard {
         Move current = moveHistory.get(currentMoveNumber);
         if (current.variations.isEmpty()) return false;
         if (index < 0 || index >= current.variations.size()) return false;
+        Variation variation = current.variations.get(index);
+        // 递归删除分支及其所有后续分支
+        recursivelyRemoveVariation(variation);
         current.variations.remove(index);
         return true;
     }
