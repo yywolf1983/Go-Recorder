@@ -323,10 +323,12 @@ public class GoBoard {
         
         // 如果当前是棋局开始状态（currentMoveNumber = -1）但已有moveHistory，处理第一手分支
         if (currentMoveNumber == -1 && !moveHistory.isEmpty()) {
-            // 将新的第一手作为一个新的分支添加到 startVariations 中
+            // 保存其他起始分支
+            List<Variation> otherVariations = new ArrayList<>(startVariations);
+            
             // 保存当前主线作为一个分支（如果不存在）
             boolean exists = false;
-            for (Variation existingVar : startVariations) {
+            for (Variation existingVar : otherVariations) {
                 List<Move> existingMoves = existingVar.getMoves();
                 if (existingMoves.size() == moveHistory.size()) {
                     boolean same = true;
@@ -345,7 +347,7 @@ public class GoBoard {
                 }
             }
             if (!exists) {
-                startVariations.add(new Variation(new ArrayList<>(moveHistory), "分支"));
+                otherVariations.add(new Variation(new ArrayList<>(moveHistory), "分支"));
             }
             
             // 创建一个新的分支，只包含新的第一手
@@ -354,7 +356,7 @@ public class GoBoard {
             
             // 检查是否已存在相同的分支
             boolean newBranchExists = false;
-            for (Variation existingVar : startVariations) {
+            for (Variation existingVar : otherVariations) {
                 List<Move> existingMoves = existingVar.getMoves();
                 if (existingMoves.size() == 1) {
                     Move existingMove = existingMoves.get(0);
@@ -366,9 +368,12 @@ public class GoBoard {
             }
             
             if (!newBranchExists) {
-                String branchName = "分支 " + (startVariations.size() + 1);
-                startVariations.add(new Variation(newBranch, branchName));
+                String branchName = "分支 " + (otherVariations.size() + 1);
+                otherVariations.add(new Variation(newBranch, branchName));
             }
+            
+            // 更新起始分支
+            startVariations = otherVariations;
             
             // 将新的第一手设为主线，允许继续落子
             moveHistory = newBranch;
@@ -864,11 +869,19 @@ public class GoBoard {
                     return false;
                 }
                 
+                // 保存其他起始分支（不包括当前选择的分支）
+                List<Variation> otherVariations = new ArrayList<>();
+                for (int i = 0; i < startVariations.size(); i++) {
+                    if (i != index) {
+                        otherVariations.add(startVariations.get(i));
+                    }
+                }
+                
                 // 保存当前主线作为一个分支（Sabaki风格）
                 if (!moveHistory.isEmpty()) {
                     // 检查是否已存在相同的分支
                     boolean exists = false;
-                    for (Variation existingVar : startVariations) {
+                    for (Variation existingVar : otherVariations) {
                         List<Move> existingMoves = existingVar.getMoves();
                         if (existingMoves.size() == moveHistory.size()) {
                             boolean same = true;
@@ -887,13 +900,23 @@ public class GoBoard {
                         }
                     }
                     if (!exists) {
-                        startVariations.add(new Variation(moveHistory, "分支"));
+                        otherVariations.add(new Variation(moveHistory, "分支"));
                     }
                 }
                 
                 // 将选择的分支设为主线（Sabaki风格）
                 moveHistory = new ArrayList<>();
                 moveHistory.addAll(vMoves);
+                
+                // 重新设置起始分支，只保留其他分支
+                startVariations = new ArrayList<>(otherVariations);
+                
+                // 调试信息
+                Log.d("GoBoard", "选择起始分支后，startVariations数量: " + startVariations.size());
+                for (int i = 0; i < startVariations.size(); i++) {
+                    Log.d("GoBoard", "起始分支 " + i + ": " + startVariations.get(i).getMoves().size() + " 步");
+                }
+                
             currentMoveNumber = Math.min(0, moveHistory.size() - 1);
             resetBoardToCurrentMove();
             return true;
@@ -1119,14 +1142,44 @@ public class GoBoard {
             sb.append("RE[").append(escapeSGFText(result)).append("]");
         }
         
-        // 处理主序列和分支
-        processMoveHistory(sb, moveHistory);
+        // 调试信息
+        Log.d("GoBoard", "toSGFString: startVariations数量: " + startVariations.size());
+        for (int i = 0; i < startVariations.size(); i++) {
+            Log.d("GoBoard", "toSGFString: 起始分支 " + i + ": " + startVariations.get(i).getMoves().size() + " 步");
+        }
         
-        // 处理起始分支
-        for (Variation startVar : startVariations) {
+        // 处理主序列，将其作为第一个分支
+        if (!moveHistory.isEmpty()) {
             sb.append("(");
-            processMoveHistory(sb, startVar.getMoves());
+            // 只处理到currentMoveNumber的移动，后面的移动作为分支
+            for (int i = 0; i <= currentMoveNumber && i < moveHistory.size(); i++) {
+                Move move = moveHistory.get(i);
+                processMoveWithVariations(sb, move);
+            }
+            
+            // 如果currentMoveNumber后面还有移动，将其作为当前位置的分支
+            if (currentMoveNumber < moveHistory.size() - 1) {
+                List<Move> remainingMoves = new ArrayList<>(moveHistory.subList(currentMoveNumber + 1, moveHistory.size()));
+                if (!remainingMoves.isEmpty()) {
+                    sb.append("(");
+                    for (Move move : remainingMoves) {
+                        processMoveWithVariations(sb, move);
+                    }
+                    sb.append(")");
+                }
+            }
             sb.append(")");
+        }
+        
+        // 处理起始分支（根节点下的其他分支）
+        if (!startVariations.isEmpty()) {
+            for (Variation startVar : startVariations) {
+                sb.append("(");
+                for (Move varMove : startVar.getMoves()) {
+                    processMoveWithVariations(sb, varMove);
+                }
+                sb.append(")");
+            }
         }
         
         sb.append(")");
@@ -1134,31 +1187,69 @@ public class GoBoard {
     }
     
     /**
-     * 处理移动历史并生成SGF字符串
-     * @param sb StringBuilder对象
-     * @param moves 移动列表
+     * 创建SGF节点字符串
+     * @param move 移动对象
+     * @return SGF节点字符串
      */
-    private void processMoveHistory(StringBuilder sb, List<Move> moves) {
-        for (Move move : moves) {
-            // 添加当前移动
-            String color = move.color == 1 ? "B" : "W";
-            if (move.x == -1) { // 虚手
-                sb.append(";").append(color).append("[]");
-            } else {
-                sb.append(";").append(color)
-                  .append("[").append((char)('a'+move.x))
-                  .append((char)('a'+move.y)).append("]");
-            }
-            
-            // 添加注释
-            if (move.comment != null && !move.comment.isEmpty()) {
-                sb.append("C[").append(escapeSGFText(move.comment)).append("]");
-            }
-            
-            // 处理当前移动的分支
+    private String createSGFNode(Move move) {
+        StringBuilder nodeSb = new StringBuilder();
+        
+        // 添加颜色和坐标
+        String color = move.color == 1 ? "B" : "W";
+        if (move.x == -1) { // 虚手
+            nodeSb.append(color).append("[]");
+        } else {
+            nodeSb.append(color)
+                  .append("[").append((char)('a' + move.x))
+                  .append((char)('a' + move.y)).append("]");
+        }
+        
+        // 添加注释
+        if (move.comment != null && !move.comment.isEmpty()) {
+            nodeSb.append("C[").append(escapeSGFText(move.comment)).append("]");
+        }
+        
+        // 添加标签
+        if (move.label != null && !move.label.isEmpty()) {
+            nodeSb.append("LB[").append(escapeSGFText(move.label)).append("]");
+        }
+        
+        // 添加标记
+        switch (move.markType) {
+            case 1:
+                nodeSb.append("TR[[").append((char)('a' + move.x)).append((char)('a' + move.y)).append("]]");
+                break;
+            case 2:
+                nodeSb.append("SQ[[").append((char)('a' + move.x)).append((char)('a' + move.y)).append("]]");
+                break;
+            case 3:
+                nodeSb.append("CR[[").append((char)('a' + move.x)).append((char)('a' + move.y)).append("]]");
+                break;
+            case 4:
+                nodeSb.append("BM[[").append((char)('a' + move.x)).append((char)('a' + move.y)).append("]]");
+                break;
+        }
+        
+        return nodeSb.toString();
+    }
+    
+    /**
+     * 处理移动及其分支
+     * @param sb StringBuilder对象
+     * @param move 移动对象
+     */
+    private void processMoveWithVariations(StringBuilder sb, Move move) {
+        // 添加当前移动
+        sb.append(";").append(createSGFNode(move));
+        
+        // 处理当前移动的分支
+        if (!move.variations.isEmpty()) {
             for (Variation variation : move.variations) {
                 sb.append("(");
-                processMoveHistory(sb, variation.getMoves());
+                // 处理分支中的每一步
+                for (Move varMove : variation.getMoves()) {
+                    processMoveWithVariations(sb, varMove);
+                }
                 sb.append(")");
             }
         }

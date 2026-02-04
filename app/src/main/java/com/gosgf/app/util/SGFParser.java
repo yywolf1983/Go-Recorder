@@ -184,9 +184,14 @@ public class SGFParser {
         // 保存根节点
         saveNode(tree.getRootNode(), sb);
         
-        // 保存主序列
-        for (Node node : tree.getMainSequence()) {
-            saveNode(node, sb);
+        // 保存主序列，作为第一个分支
+        List<Node> mainSequence = tree.getMainSequence();
+        if (mainSequence != null && !mainSequence.isEmpty()) {
+            sb.append("(");
+            for (Node node : mainSequence) {
+                saveNode(node, sb);
+            }
+            sb.append(")");
         }
         
         // 保存根节点分支

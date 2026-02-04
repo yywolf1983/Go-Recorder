@@ -137,20 +137,95 @@ public class SGFConverter {
             }
             
             // 解析根节点下的分支（第一手分支）
-            // 总是解析主序列，因为主序列包含当前棋局的所有步骤
             List<SGFParser.Node> mainSequence = sgfTree.getMainSequence();
+            List<List<SGFParser.Node>> rootVariations = sgfTree.getRootVariations();
+            
+            // 保存原始的根节点分支，用于后续处理
+            List<List<SGFParser.Node>> originalRootVariations = null;
+            if (rootVariations != null) {
+                originalRootVariations = new ArrayList<>(rootVariations);
+            }
+            
+            // 如果主序列为空，但是有根节点分支，将第一个根节点分支作为主序列
+            if ((mainSequence == null || mainSequence.isEmpty()) && rootVariations != null && !rootVariations.isEmpty()) {
+                mainSequence = rootVariations.get(0);
+                // 移除第一个根节点分支，因为它已经被作为主序列处理了
+                rootVariations.remove(0);
+            }
+            
+            // 解析主序列
             if (mainSequence != null && !mainSequence.isEmpty()) {
                 parseSequenceToBoard(mainSequence, board);
             }
             
-            // 如果有根节点分支，额外解析它们
-            if (sgfTree.hasRootVariations()) {
-                parseRootVariationsToBoard(sgfTree.getRootVariations(), board);
+            // 解析所有根节点分支，无论主序列是否为空
+            if (originalRootVariations != null && !originalRootVariations.isEmpty()) {
+                // 检查是否有与主序列相同的分支，如果有，跳过
+                List<List<SGFParser.Node>> uniqueRootVariations = new ArrayList<>();
+                for (List<SGFParser.Node> variation : originalRootVariations) {
+                    if (!isVariationEqualToMainSequence(variation, mainSequence)) {
+                        uniqueRootVariations.add(variation);
+                    }
+                }
+                if (!uniqueRootVariations.isEmpty()) {
+                    parseRootVariationsToBoard(uniqueRootVariations, board);
+                }
             }
         } catch (Exception e) {
             System.err.println("SGF转换错误: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+    
+    /**
+     * 检查一个分支是否与主序列相同
+     * @param variation 分支
+     * @param mainSequence 主序列
+     * @return 是否相同
+     */
+    private static boolean isVariationEqualToMainSequence(List<SGFParser.Node> variation, List<SGFParser.Node> mainSequence) {
+        if (variation == null || mainSequence == null) {
+            return false;
+        }
+        if (variation.size() != mainSequence.size()) {
+            return false;
+        }
+        for (int i = 0; i < variation.size(); i++) {
+            SGFParser.Node varNode = variation.get(i);
+            SGFParser.Node mainNode = mainSequence.get(i);
+            if (!areNodesEqual(varNode, mainNode)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    /**
+     * 检查两个节点是否相同
+     * @param node1 第一个节点
+     * @param node2 第二个节点
+     * @return 是否相同
+     */
+    private static boolean areNodesEqual(SGFParser.Node node1, SGFParser.Node node2) {
+        if (node1 == null || node2 == null) {
+            return false;
+        }
+        
+        List<String> identifiers1 = node1.getPropertyIdentifiers();
+        List<String> identifiers2 = node2.getPropertyIdentifiers();
+        
+        if (identifiers1.size() != identifiers2.size()) {
+            return false;
+        }
+        
+        for (String ident : identifiers1) {
+            List<String> values1 = node1.getPropertyValues(ident);
+            List<String> values2 = node2.getPropertyValues(ident);
+            if (!values1.equals(values2)) {
+                return false;
+            }
+        }
+        return true;
     }
     
     /**
@@ -198,7 +273,10 @@ public class SGFConverter {
             
             // 保存所有起始分支
             List<List<GoBoard.Move>> startVariations = board.getStartVariations();
-            for (List<GoBoard.Move> variationMoves : startVariations) {
+            System.out.println("保存时，起始分支数量: " + startVariations.size());
+            for (int i = 0; i < startVariations.size(); i++) {
+                List<GoBoard.Move> variationMoves = startVariations.get(i);
+                System.out.println("保存起始分支 " + i + ": " + variationMoves.size() + " 步");
                 List<SGFParser.Node> variationNodes = new ArrayList<>();
                 for (GoBoard.Move move : variationMoves) {
                     variationNodes.add(moveToNode(move));
