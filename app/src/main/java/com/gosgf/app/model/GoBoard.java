@@ -309,65 +309,76 @@ public class GoBoard {
         Move newMove = new Move(x, y, currentPlayer);
         
         // 如果当前是棋局开始状态（currentMoveNumber = -1），处理第一手分支
-        if (currentMoveNumber == -1) {
-            // 如果已经有 moveHistory，将新的第一手作为一个新的分支添加到 startVariations 中
-            if (!moveHistory.isEmpty()) {
-                // 保存当前主线作为一个分支（如果不存在）
-                boolean exists = false;
-                for (Variation existingVar : startVariations) {
-                    List<Move> existingMoves = existingVar.getMoves();
-                    if (existingMoves.size() == moveHistory.size()) {
-                        boolean same = true;
-                        for (int i = 0; i < existingMoves.size(); i++) {
-                            Move existingMove = existingMoves.get(i);
-                            Move currentMove = moveHistory.get(i);
-                            if (existingMove.x != currentMove.x || existingMove.y != currentMove.y || existingMove.color != currentMove.color) {
-                                same = false;
-                                break;
-                            }
-                        }
-                        if (same) {
-                            exists = true;
+        if (currentMoveNumber == -1 && moveHistory.isEmpty()) {
+            // 棋局刚开始，直接添加第一步，不需要创建分支
+            moveHistory.add(newMove);
+            currentMoveNumber = 0;
+            mainBranchHistory.add(newMove);
+            
+            // 切换玩家
+            currentPlayer = (currentPlayer == 1) ? 2 : 1;
+            
+            return true;
+        }
+        
+        // 如果当前是棋局开始状态（currentMoveNumber = -1）但已有moveHistory，处理第一手分支
+        if (currentMoveNumber == -1 && !moveHistory.isEmpty()) {
+            // 将新的第一手作为一个新的分支添加到 startVariations 中
+            // 保存当前主线作为一个分支（如果不存在）
+            boolean exists = false;
+            for (Variation existingVar : startVariations) {
+                List<Move> existingMoves = existingVar.getMoves();
+                if (existingMoves.size() == moveHistory.size()) {
+                    boolean same = true;
+                    for (int i = 0; i < existingMoves.size(); i++) {
+                        Move existingMove = existingMoves.get(i);
+                        Move currentMove = moveHistory.get(i);
+                        if (existingMove.x != currentMove.x || existingMove.y != currentMove.y || existingMove.color != currentMove.color) {
+                            same = false;
                             break;
                         }
                     }
-                }
-                if (!exists) {
-                    startVariations.add(new Variation(new ArrayList<>(moveHistory), "分支"));
-                }
-                
-                // 创建一个新的分支，只包含新的第一手
-                List<Move> newBranch = new ArrayList<>();
-                newBranch.add(newMove);
-                
-                // 检查是否已存在相同的分支
-                boolean newBranchExists = false;
-                for (Variation existingVar : startVariations) {
-                    List<Move> existingMoves = existingVar.getMoves();
-                    if (existingMoves.size() == 1) {
-                        Move existingMove = existingMoves.get(0);
-                        if (existingMove.x == newMove.x && existingMove.y == newMove.y && existingMove.color == newMove.color) {
-                            newBranchExists = true;
-                            break;
-                        }
+                    if (same) {
+                        exists = true;
+                        break;
                     }
                 }
-                
-                if (!newBranchExists) {
-                    String branchName = "分支 " + (startVariations.size() + 1);
-                    startVariations.add(new Variation(newBranch, branchName));
-                }
-                
-                // 将新的第一手设为主线，允许继续落子
-                moveHistory = newBranch;
-                currentMoveNumber = 0;
-                mainBranchHistory = new ArrayList<>(newBranch);
-                
-                // 切换玩家
-                currentPlayer = (currentPlayer == 1) ? 2 : 1;
-                
-                return true;
             }
+            if (!exists) {
+                startVariations.add(new Variation(new ArrayList<>(moveHistory), "分支"));
+            }
+            
+            // 创建一个新的分支，只包含新的第一手
+            List<Move> newBranch = new ArrayList<>();
+            newBranch.add(newMove);
+            
+            // 检查是否已存在相同的分支
+            boolean newBranchExists = false;
+            for (Variation existingVar : startVariations) {
+                List<Move> existingMoves = existingVar.getMoves();
+                if (existingMoves.size() == 1) {
+                    Move existingMove = existingMoves.get(0);
+                    if (existingMove.x == newMove.x && existingMove.y == newMove.y && existingMove.color == newMove.color) {
+                        newBranchExists = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!newBranchExists) {
+                String branchName = "分支 " + (startVariations.size() + 1);
+                startVariations.add(new Variation(newBranch, branchName));
+            }
+            
+            // 将新的第一手设为主线，允许继续落子
+            moveHistory = newBranch;
+            currentMoveNumber = 0;
+            mainBranchHistory = new ArrayList<>(newBranch);
+            
+            // 切换玩家
+            currentPlayer = (currentPlayer == 1) ? 2 : 1;
+            
+            return true;
         }
         // 如果当前不是在最后一手，保留后续为分支并截断主线
         else if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size() - 1) {
