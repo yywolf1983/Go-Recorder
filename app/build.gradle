@@ -65,4 +65,7 @@ dependencies {
     // Update dependencies to compatible versions
     implementation 'androidx.emoji2:emoji2:1.4.0'
     implementation 'androidx.emoji2:emoji2-views-helper:1.4.0'
+    
+    // Test dependencies
+    testImplementation 'junit:junit:4.13.2'
 }
