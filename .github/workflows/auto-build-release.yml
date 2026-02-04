@@ -44,3 +44,14 @@ jobs:
         name: go-record-app-release
         path: app/build/outputs/apk/release/app-release.apk
         retention-days: 90
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: auto-${{ github.sha }}
+        name: Auto Release ${{ github.sha }}
+        draft: false
+        prerelease: true
+        files: |
+          app/build/outputs/apk/release/app-release.apk
+        generate_release_notes: true
