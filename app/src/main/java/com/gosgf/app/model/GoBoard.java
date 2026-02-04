@@ -260,6 +260,11 @@ public class GoBoard {
     public boolean placeStone(int x, int y) {
         // 处理虚手
         if (x == -1 && y == -1) {
+            // 第一手不能是虚手
+            if (moveHistory.isEmpty()) {
+                Log.e("GoBoard", "第一手不能是虚手");
+                return false;
+            }
             skipTurn();
             return true;
         }
