@@ -385,7 +385,17 @@ public class GoBoard {
             Move base = moveHistory.get(currentMoveNumber);
             List<Move> remainder = new ArrayList<>(moveHistory.subList(currentMoveNumber + 1, moveHistory.size()));
             if (!remainder.isEmpty()) {
-                base.variations.add(new Variation(remainder, "分支"));
+                // 检查是否已存在相同的分支
+                boolean exists = false;
+                for (Variation existingVar : base.variations) {
+                    if (existingVar.isSameAs(new Variation(remainder, ""))) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    base.variations.add(new Variation(remainder, "分支"));
+                }
             }
             moveHistory = new ArrayList<>(moveHistory.subList(0, currentMoveNumber + 1));
         }
@@ -583,6 +593,7 @@ public class GoBoard {
 
     public void resetBoardToCurrentMove() {
         board = copyBoard(initialBoard);
+        currentPlayer = 1; // 默认为黑棋先行
         for (int i = 0; i <= currentMoveNumber; i++) {
             Move move = moveHistory.get(i);
             replayMove(move);
@@ -592,20 +603,27 @@ public class GoBoard {
     private void replayMove(Move move) {
         if (move == null) return;
         if (move.x < 0 || move.y < 0) {
+            // 虚手处理
             currentPlayer = move.color;
             currentPlayer = 3 - currentPlayer;
             return;
         }
         if (!isValidCoordinate(move.x, move.y)) return;
         if (board[move.x][move.y] != 0) return;
+        
         currentPlayer = move.color;
         board[move.x][move.y] = currentPlayer;
+        
+        // 处理提子逻辑
         checkCapture(move.x, move.y);
+        
+        // 检查是否自杀
         Set<Point> selfGroup = new HashSet<>();
         boolean hasSelfLiberty = hasLiberty(move.x, move.y, selfGroup);
         if (!hasSelfLiberty) {
             board[move.x][move.y] = 0;
         }
+        
         currentPlayer = 3 - currentPlayer;
     }
 
@@ -670,29 +688,21 @@ public class GoBoard {
         }
         
         // 检查是否可以继续前进
-        boolean canContinue = currentMoveNumber < moveHistory.size() - 1;
+        if (currentMoveNumber < moveHistory.size() - 1) {
+            currentMoveNumber++;
+            resetBoardToCurrentMove();
+            return true;
+        }
         
         // 检查当前手是否有分支
-        boolean hasBranch = false;
         if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size()) {
             Move currentMove = moveHistory.get(currentMoveNumber);
-            hasBranch = !currentMove.variations.isEmpty();
+            if (!currentMove.variations.isEmpty()) {
+                return selectVariation(0);
+            }
         }
         
-        // 如果不能继续前进且没有分支，返回false
-        if (!canContinue && !hasBranch) {
-            return false;
-        }
-        
-        // 如果有分支，选择第一个分支
-        if (hasBranch) {
-            return selectVariation(0);
-        }
-        
-        // 直接前进到下一步
-        currentMoveNumber++;
-        resetBoardToCurrentMove();
-        return true;
+        return false;
     }
     
     public void loadFromSGF(String sgf) throws SGFParser.SGFParseException {
@@ -931,6 +941,11 @@ public class GoBoard {
                     }
                 }
                 
+                // 保存主分支信息
+                if (mainBranchHistory.isEmpty() || currentMoveNumber < mainBranchHistory.size()) {
+                    mainBranchHistory = new ArrayList<>(prefix);
+                }
+                
                 // 将选择的分支添加到主线
                 moveHistory = prefix;
                 moveHistory.addAll(vMoves);
@@ -1088,7 +1103,10 @@ public class GoBoard {
 
     public String toSGFString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("(;GM[1]FF[4]");
+        sb.append("(");
+        
+        // 添加根节点
+        sb.append(";GM[1]FF[4]");
         
         // 添加头信息
         if (blackPlayer != null && !blackPlayer.isEmpty()) {
@@ -1101,8 +1119,28 @@ public class GoBoard {
             sb.append("RE[").append(escapeSGFText(result)).append("]");
         }
         
-        // 添加棋步
-        for (Move move : moveHistory) {
+        // 处理主序列和分支
+        processMoveHistory(sb, moveHistory);
+        
+        // 处理起始分支
+        for (Variation startVar : startVariations) {
+            sb.append("(");
+            processMoveHistory(sb, startVar.getMoves());
+            sb.append(")");
+        }
+        
+        sb.append(")");
+        return sb.toString();
+    }
+    
+    /**
+     * 处理移动历史并生成SGF字符串
+     * @param sb StringBuilder对象
+     * @param moves 移动列表
+     */
+    private void processMoveHistory(StringBuilder sb, List<Move> moves) {
+        for (Move move : moves) {
+            // 添加当前移动
             String color = move.color == 1 ? "B" : "W";
             if (move.x == -1) { // 虚手
                 sb.append(";").append(color).append("[]");
@@ -1111,33 +1149,19 @@ public class GoBoard {
                   .append("[").append((char)('a'+move.x))
                   .append((char)('a'+move.y)).append("]");
             }
+            
             // 添加注释
             if (move.comment != null && !move.comment.isEmpty()) {
                 sb.append("C[").append(escapeSGFText(move.comment)).append("]");
             }
             
-            // 添加分支
+            // 处理当前移动的分支
             for (Variation variation : move.variations) {
                 sb.append("(");
-                for (Move varMove : variation.getMoves()) {
-                    color = varMove.color == 1 ? "B" : "W";
-                    if (varMove.x == -1) { // 虚手
-                        sb.append(";").append(color).append("[]");
-                    } else {
-                        sb.append(";").append(color)
-                          .append("[").append((char)('a'+varMove.x))
-                          .append((char)('a'+varMove.y)).append("]");
-                    }
-                    // 添加注释
-                    if (varMove.comment != null && !varMove.comment.isEmpty()) {
-                        sb.append("C[").append(escapeSGFText(varMove.comment)).append("]");
-                    }
-                }
+                processMoveHistory(sb, variation.getMoves());
                 sb.append(")");
             }
         }
-        sb.append(")");
-        return sb.toString();
     }
     
     private String escapeSGFText(String text) {
