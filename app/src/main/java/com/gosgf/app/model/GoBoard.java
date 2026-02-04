@@ -74,6 +74,10 @@ public class GoBoard {
     private Point lastCapture = null; // 记录最后一次提子的位置
     private boolean isBoardLocked = false; // 棋盘锁定标志，true表示棋盘已固定，不允许修改
     
+    // 添加常量定义
+    public static final int BLACK = 1;
+    public static final int WHITE = 2;
+    
     public static class Move {
         public int x;
         public int y;
@@ -1089,6 +1093,34 @@ public class GoBoard {
             }
         }
         return names;
+    }
+    
+    // 添加接受三个参数的 placeStone 方法，用于测试
+    public boolean placeStone(int x, int y, int color) {
+        // 保存当前玩家
+        int originalPlayer = currentPlayer;
+        
+        // 设置指定的玩家颜色
+        currentPlayer = color;
+        
+        // 调用现有的 placeStone 方法
+        boolean result = placeStone(x, y);
+        
+        // 恢复原来的玩家
+        currentPlayer = originalPlayer;
+        
+        return result;
+    }
+    
+    // 添加 createVariation 方法，用于测试
+    public boolean createVariation(String name) {
+        if (currentMoveNumber >= 0 && currentMoveNumber < moveHistory.size()) {
+            Move current = moveHistory.get(currentMoveNumber);
+            List<Move> emptyVariation = new ArrayList<>();
+            current.addVariation(emptyVariation, name);
+            return true;
+        }
+        return false;
     }
     
     public String getVariationStructure() {
