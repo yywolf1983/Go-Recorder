@@ -54,10 +54,56 @@
 
 emulator -avd Pixel_9_Pro_API_33
 
-## TODO
+## SGF 处理逻辑
 
-TODO 没有考虑让子的情况，这个应该以后也不会考虑。
-TODO 虚手按钮有没有实现功能。基本上不用。
+### 支持的功能
 
-##SGF 规范
+- **标准SGF格式**：支持 FF[4] 标准格式
+- **游戏信息**：支持 PB（黑方）、PW（白方）、RE（结果）、DT（日期）等属性
+- **让子支持**：支持 HA（让子数）、AB（黑棋让子）、AW（白棋让子）属性
+- **分支处理**：
+  - 第一手分支：通过 startVariations 管理
+  - 后续分支：通过 Move.variations 管理
+  - 分支保存和加载：完整支持
+- **虚手支持**：
+  - 虚手落子：支持坐标 (-1, -1)
+  - 虚手保存：保存为 "tt" 格式
+  - 虚手加载：从 "tt" 格式解析
+
+### 核心流程
+
+#### 保存流程
+```
+GoBoard → SGFConverter.boardToSgfTree() → SGFParser.save() → SGF字符串
+```
+- **boardToSgfTree**：将 moveHistory 作为主序列，startVariations 作为根节点分支
+- **save**：保存根节点、主序列和所有分支
+
+#### 加载流程
+```
+SGF字符串 → SGFParser.parse() → SGFConverter.sgfTreeToBoard() → GoBoard
+```
+- **parse**：解析SGF字符串为 SGFTree
+- **sgfTreeToBoard**：解析根节点信息，主序列为 moveHistory，根节点分支为 startVariations
+
+### 分支管理
+
+1. **第一手分支**：
+   - 当回到起始状态再落子时，会创建新的第一手分支
+   - 分支保存在 startVariations 中
+   - 加载时从根节点分支恢复
+
+2. **后续分支**：
+   - 当在非最后一步落子时，会创建后续分支
+   - 分支保存在对应 Move 的 variations 中
+   - 加载时从节点分支恢复
+
+### 虚手处理
+
+- **落子**：支持坐标 (-1, -1) 表示虚手
+- **保存**：虚手保存为 SGF 的 "tt" 格式
+- **加载**：SGF 的 "tt" 格式解析为虚手
+
+## SGF 规范
+
 https://www.red-bean.com/sgf/properties.html#CA

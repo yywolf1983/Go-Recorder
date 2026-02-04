@@ -451,22 +451,13 @@ public class SGFConverter {
             return;
         }
         
-        boolean isFirst = true;
         for (List<SGFParser.Node> variation : rootVariations) {
             List<GoBoard.Move> moves = new ArrayList<>();
             parseVariationToMoves(variation, moves);
             if (!moves.isEmpty()) {
-                if (isFirst) {
-                    // 第一个分支作为主线，添加到 moveHistory
-                    for (GoBoard.Move move : moves) {
-                        board.addMoveToHistory(move);
-                    }
-                    isFirst = false;
-                } else {
-                    // 其他分支添加到 startVariations
-                    String branchName = "分支 " + (board.getStartVariationsCount() + 1);
-                    board.addStartVariation(moves, branchName);
-                }
+                // 所有根节点分支都添加到 startVariations
+                String branchName = "分支 " + (board.getStartVariationsCount() + 1);
+                board.addStartVariation(moves, branchName);
             }
         }
     }
