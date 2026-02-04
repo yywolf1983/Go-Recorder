@@ -258,6 +258,12 @@ public class GoBoard {
     
     // 修改placeStone方法中的自杀判断逻辑
     public boolean placeStone(int x, int y) {
+        // 处理虚手
+        if (x == -1 && y == -1) {
+            skipTurn();
+            return true;
+        }
+        
         Log.d("GoBoard", "尝试落子: (" + x + "," + y + ")");
         
         // 添加坐标有效性检查

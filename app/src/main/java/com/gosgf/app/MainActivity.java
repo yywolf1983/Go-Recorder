@@ -167,7 +167,9 @@ public class MainActivity extends AppCompatActivity {
             }
             
             try {
-                // 不调用 resetGame()，直接解析 SGF，这样不会清空 startVariations
+                // 调用 resetGame() 清空旧棋局状态
+                boardView.getBoard().resetGame();
+                // 解析 SGF
                 SGFParser.parseSGF(sb.toString(), boardView.getBoard());
                 boardView.invalidateBoard();
                 updateGameInfo();

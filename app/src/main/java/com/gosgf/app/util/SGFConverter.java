@@ -137,15 +137,15 @@ public class SGFConverter {
             }
             
             // 解析根节点下的分支（第一手分支）
-            // 注意：如果有根节点分支，就不解析主序列，因为根节点分支已经包含了所有分支
+            // 总是解析主序列，因为主序列包含当前棋局的所有步骤
+            List<SGFParser.Node> mainSequence = sgfTree.getMainSequence();
+            if (mainSequence != null && !mainSequence.isEmpty()) {
+                parseSequenceToBoard(mainSequence, board);
+            }
+            
+            // 如果有根节点分支，额外解析它们
             if (sgfTree.hasRootVariations()) {
                 parseRootVariationsToBoard(sgfTree.getRootVariations(), board);
-            } else {
-                // 如果没有根节点分支，才解析主序列
-                List<SGFParser.Node> mainSequence = sgfTree.getMainSequence();
-                if (mainSequence != null && !mainSequence.isEmpty()) {
-                    parseSequenceToBoard(mainSequence, board);
-                }
             }
         } catch (Exception e) {
             System.err.println("SGF转换错误: " + e.getMessage());
@@ -185,20 +185,18 @@ public class SGFConverter {
         List<SGFParser.Node> mainSequence = new ArrayList<>();
         List<GoBoard.Move> moveHistory = board.getMoveHistory();
         
+        // 无论是否有起始分支，都将当前moveHistory作为主序列保存
+        if (!moveHistory.isEmpty()) {
+            for (GoBoard.Move move : moveHistory) {
+                mainSequence.add(moveToNode(move));
+            }
+        }
+        
+        // 如果有起始分支，将它们作为额外的分支添加到rootVariations
         if (board.hasStartVariations()) {
-            // 多分支棋局：将所有起始分支保存到 rootVariations
             rootVariations = new ArrayList<>();
             
-            // 首先将当前的 moveHistory 作为一个分支保存（当前主线）
-            if (!moveHistory.isEmpty()) {
-                List<SGFParser.Node> currentVariationNodes = new ArrayList<>();
-                for (GoBoard.Move move : moveHistory) {
-                    currentVariationNodes.add(moveToNode(move));
-                }
-                rootVariations.add(currentVariationNodes);
-            }
-            
-            // 然后保存所有其他起始分支
+            // 保存所有起始分支
             List<List<GoBoard.Move>> startVariations = board.getStartVariations();
             for (List<GoBoard.Move> variationMoves : startVariations) {
                 List<SGFParser.Node> variationNodes = new ArrayList<>();
@@ -206,11 +204,6 @@ public class SGFConverter {
                     variationNodes.add(moveToNode(move));
                 }
                 rootVariations.add(variationNodes);
-            }
-        } else {
-            // 普通棋局：将 moveHistory 作为主序列保存
-            for (GoBoard.Move move : moveHistory) {
-                mainSequence.add(moveToNode(move));
             }
         }
         
@@ -456,21 +449,6 @@ public class SGFConverter {
     private static void parseRootVariationsToBoard(List<List<SGFParser.Node>> rootVariations, GoBoard board) {
         if (rootVariations == null || rootVariations.isEmpty()) {
             return;
-        }
-        
-        // 清空 moveHistory 和 startVariations，重新填充
-        try {
-            java.lang.reflect.Field moveHistoryField = GoBoard.class.getDeclaredField("moveHistory");
-            moveHistoryField.setAccessible(true);
-            java.util.List<GoBoard.Move> moveHistory = (java.util.List<GoBoard.Move>) moveHistoryField.get(board);
-            moveHistory.clear();
-            
-            java.lang.reflect.Field startVariationsField = GoBoard.class.getDeclaredField("startVariations");
-            startVariationsField.setAccessible(true);
-            java.util.List<GoBoard.Variation> startVariations = (java.util.List<GoBoard.Variation>) startVariationsField.get(board);
-            startVariations.clear();
-        } catch (Exception e) {
-            System.err.println("清空棋盘状态失败: " + e.getMessage());
         }
         
         boolean isFirst = true;
